@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orchestrator - WiseBet</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    
+    <!-- Tailwind CSS (CDN for simplicity as per original, though package.json has it too) -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#00ff88",
+                        "primary-hover": "#00e67a",
+                        "background-light": "#f8fafc",
+                        "background-dark": "#050505",
+                        "surface-dark": "#0d0d0d", 
+                        "panel-dark": "#121212",
+                        "card-dark": "#181818",
+                        "border-dark": "#1f1f1f",
+                        "text-secondary": "#666666",
+                        "success": "#00ff88",
+                        "danger": "#ff4d4d",
+                        "warning": "#ffcc00",
+                        "info": "#00d4ff"
+                    },
+                    fontFamily: {
+                        "sans": ["Inter", "sans-serif"],
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.5); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.4); }
+        * { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.1) transparent; }
+        .transition-theme { transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease; }
+        body.modal-open { overflow: hidden; }
+    </style>
+</head>
+<body class="bg-[#050505] text-[#e1e1e1] h-screen overflow-hidden flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
+    <script type="module" src="/src/index.tsx"></script>
+</body>
+</html>
