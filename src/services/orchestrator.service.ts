@@ -10,10 +10,13 @@ import {
     ConnectionItem,
     BackupStatus
 } from '../types/orchestratorTypes';
+import { timeAgo } from '../utils/time';
+
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 const API = '/api/v1';
+
 
 const fetchJSON = async (url: string, options?: RequestInit) => {
   const res = await fetch(url, options);
@@ -32,7 +35,7 @@ class OrchestratorService {
     ]);
 
     const onlineComputers = computers.items.filter((c: any) => c.status === 'ONLINE').length;
-    const healthScore = _computeHealth(computers.items, alerts.total);
+    const healthScore = _computeHealth(computers.items, alerts.items);
 
     return {
       nodesOnline:    onlineComputers,
@@ -96,7 +99,7 @@ class OrchestratorService {
   }
 
   async getAlerts() {
-    const data = await fetchJSON(`${API}/alerts/?limit=100`);
+    const data = await fetchJSON(`${API}/alerts/?limit=500`);
     return data.items.map(mapAlert);
   }
 
@@ -150,6 +153,7 @@ class OrchestratorService {
   async rotateAllProxies() {
     return fetchJSON(`${API}/proxy-rotation/check-and-rotate-all`, { method: 'POST' });
   }
+  
 
   async openBrowser(params: {
     profileAdsId: string;
@@ -220,46 +224,50 @@ class OrchestratorService {
   async getActiveSessions() {
     return fetchJSON(`${API}/admin/sessions/active`);
   }
+
+  async getProxyRotationHistory(proxyId: string) {
+    return fetchJSON(`${API}/proxy-rotation/${proxyId}/history`);
+  }
 }
 
 // ─── MAPPERS ────────────────────────────────────────────────────
 
 function mapProfile(p: any) {
-  return {
-    id:               p.id.toString(),
-    adsId:            p.adspower_id,
-    name:             p.name,
-    group:            p.tags?.includes('elite') ? 'ELITE' : 'STANDARD',
-    sport:            p.sport ?? 'Fútbol',
-    bookie:           p.bookie ?? '-',
-    status:           mapProfileStatus(p.status),
-    health:           p.health_score ?? 100,
-    trustScore:       p.trust_score  ?? 100,
-    latency:          0,
-    memory:           p.memory_mb ?? 0,
-    nodeId:           p.computer_id?.toString() ?? 'N/A',
-    lastAction:       p.last_action ?? '-',
-    proxy: {
-      ip:           '-',
-      location:     `${p.city ?? '-'}, ${p.country ?? '-'}`,
-      type:         'SOAX-RES',
-      latency:      0,
-      rotationTime: 0,
-    },
-    owner:            p.owner ?? '-',
-    browserScore:     p.browser_score     ?? 0,
-    fingerprintScore: p.fingerprint_score ?? 0,
-    cookieStatus:     p.cookie_status     ?? 'MISSING',
-  };
+    return {
+        id:               p.id.toString(),
+        adsId:            p.adspower_id,
+        name:             p.name,
+        group:            p.tags?.includes('elite') ? 'ELITE' : 'STANDARD',
+        sport:            p.sport ?? 'Fútbol',
+        bookie:           p.bookie ?? '-',
+        status:           mapProfileStatus(p.status),
+        health:           p.health_score ?? 100,
+        trustScore:       p.trust_score  ?? 100,
+        latency:          p.avg_latency  ?? 0,
+        memory:           p.memory_mb    ?? 0,
+        nodeId:           p.computer_id?.toString() ?? 'N/A',
+        lastAction:       p.last_action  ?? '-',
+        proxy: {
+            ip:           '-',
+            location:     p.country ? `${p.country}` : 'N/A',
+            type:         'SOAX-RES',
+            latency:      0,
+            rotationTime: p.rotation_minutes ?? 0,
+        },
+        owner:            p.owner            ?? '-',
+        browserScore:     p.browser_score    ?? 0,
+        fingerprintScore: p.fingerprint_score ?? 0,
+        cookieStatus:     p.cookie_status    ?? 'MISSING',
+        proxyId:          p.proxy_id         ?? null,   // ← para el join con ConnectionRow
+    };
 }
-
 function mapAlert(a: any) {
   return {
     id:       a.id,
     type:     a.title,
     message:  a.message ?? '',
     severity: ({ critical: 'Critical', warning: 'Warning', info: 'Info', error: 'Critical' } as any)[a.severity] ?? 'Info',
-    time:     _timeAgo(a.created_at),
+    time:     timeAgo(a.created_at),
     nodeId:   a.source_id?.toString(),
     read:     a.status !== 'active',
   };
@@ -282,7 +290,7 @@ function mapProxy(p: any) {
     latency:        p.avg_response_time ?? 0,
     latencyHistory: [],
     nodeId:         p.detected_city ?? p.country ?? '-',
-    lastChecked:    _timeAgo(p.last_check_at),
+    lastChecked:    timeAgo(p.last_check_at),
   };
 }
 
@@ -291,11 +299,15 @@ function mapProfileStatus(s: string) {
   return map[s] ?? 'IDLE';
 }
 
-function _computeHealth(nodes: any[], alertCount: number): number {
+function _computeHealth(nodes: any[], alerts: any[]): number {
   if (!nodes.length) return 0;
-  const onlineRatio  = nodes.filter(n => n.status === 'ONLINE').length / nodes.length;
-  const alertPenalty = Math.min(alertCount * 5, 30);
-  return Math.round(onlineRatio * 100 - alertPenalty);
+  const onlineRatio = nodes.filter(n => n.status === 'ONLINE').length / nodes.length;
+  const criticalAlerts = (alerts ?? []).filter((a: any) =>
+    (a.severity === 'critical' || a.severity === 'error') &&
+    a.source !== 'proxy_rotation'
+  );
+  const alertPenalty = Math.min(criticalAlerts.length * 10, 40);
+  return Math.max(0, Math.round(onlineRatio * 100 - alertPenalty));
 }
 
 function _extractRisks(nodes: any[], alerts: any[]): string[] {
@@ -304,14 +316,6 @@ function _extractRisks(nodes: any[], alerts: any[]): string[] {
   nodes.filter(n => n.status !== 'ONLINE').forEach(n => risks.push(`Offline: ${n.name}`));
   alerts.filter(a => a.severity === 'critical').forEach(a => risks.push(a.type));
   return risks.slice(0, 5);
-}
-
-function _timeAgo(iso: string): string {
-  if (!iso) return 'never';
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60)   return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s/60)}m ago`;
-  return `${Math.floor(s/3600)}h ago`;
 }
 
 export const orchestratorService = new OrchestratorService();

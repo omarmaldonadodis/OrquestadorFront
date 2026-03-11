@@ -45,6 +45,7 @@ export interface ProfileItem {
     browserScore?: number; // 0-100
     fingerprintScore?: number; // 0-100
     cookieStatus?: 'OK' | 'EXPIRED' | 'MISSING';
+    proxyId?: number;
 }
 
 export interface Alert {
@@ -69,11 +70,12 @@ export interface KPIStats {
 }
 
 export interface SystemEvent {
-    id: string;
-    type: 'INFO' | 'WARNING' | 'ERROR' | 'SUCCESS';
-    message: string;
-    source: string;
+    id:        string;
+    type:      'SUCCESS' | 'ERROR' | 'INFO' | 'WARNING';
+    message:   string;
+    source:    string;
     timestamp: string;
+    meta?:     { session_id?: number };   // ← ADD
 }
 
 export interface Job {

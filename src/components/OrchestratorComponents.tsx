@@ -7,6 +7,8 @@ import {
     Shield, Cookie, Fingerprint, RefreshCw, Server
 } from 'lucide-react';
 import { ComputerNode, ProfileItem, Alert, Job, SystemEvent, ServiceStatus } from '../types/orchestratorTypes';
+import { timeAgo } from '../utils/time';
+
 
 // --- SKELETON COMPONENTS ---
 export const SkeletonKPI = () => (
@@ -350,6 +352,7 @@ export const HealthOverview = ({ score, risks, onDetails }: { score: number, ris
 );
 
 // --- ACTIVITY FEED ---
+
 export const SystemEventsFeed = ({ events, onEventClick }: { events: SystemEvent[], onEventClick?: (ev: SystemEvent) => void }) => (
     <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6 h-full flex flex-col">
         <h3 className="text-[10px] font-black text-[#666] uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
@@ -357,29 +360,71 @@ export const SystemEventsFeed = ({ events, onEventClick }: { events: SystemEvent
         </h3>
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-0 relative">
             <div className="absolute left-[11px] top-2 bottom-2 w-px bg-white/5" />
-            {events.map((ev, i) => (
-                <div
-                    key={ev.id}
-                    onClick={() => onEventClick && onEventClick(ev)}
-                    className="flex gap-4 relative pl-8 py-3 group cursor-pointer hover:bg-white/[0.02] rounded-r-xl transition-colors"
-                >
-                    <div className={`absolute left-[7px] top-4 size-2.5 rounded-full border-2 border-[#0a0a0a] z-10 transition-transform group-hover:scale-125 ${ev.type === 'SUCCESS' ? 'bg-[#00ff88]' : ev.type === 'ERROR' ? 'bg-red-500' : ev.type === 'WARNING' ? 'bg-amber-500' : 'bg-blue-500'}`} />
-                    <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                            <p className="text-[11px] font-bold text-[#e0e0e0] group-hover:text-white transition-colors">{ev.message}</p>
-                            <span className="text-[9px] text-[#555] font-mono whitespace-nowrap">hace {10 + i * 5} min</span>
+            {events.map((ev) => {
+                const meta = (ev as any).meta;
+                const domain = meta?.target_url
+                    ? (() => { try { return new URL(meta.target_url).hostname; } catch { return meta.target_url; } })()
+                    : null;
+
+                return (
+                    <div
+                        key={ev.id}
+                        onClick={() => onEventClick && onEventClick(ev)}
+                        className="flex gap-4 relative pl-8 py-3 group cursor-pointer hover:bg-white/[0.02] rounded-r-xl transition-colors"
+                    >
+                        <div className={`absolute left-[7px] top-4 size-2.5 rounded-full border-2 border-[#0a0a0a] z-10 transition-transform group-hover:scale-125 ${
+                            ev.type === 'SUCCESS' ? 'bg-[#00ff88]' :
+                            ev.type === 'ERROR'   ? 'bg-red-500'   :
+                            ev.type === 'WARNING' ? 'bg-amber-500' : 'bg-blue-500'
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start gap-2">
+                                <p className="text-[11px] font-bold text-[#e0e0e0] group-hover:text-white transition-colors truncate">
+                                    {ev.message}
+                                </p>
+                                <span className="text-[9px] text-[#555] font-mono whitespace-nowrap shrink-0">
+                                    hace {timeAgo(ev.timestamp)}
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <p className="text-[10px] text-[#666]">{ev.source}</p>
+                                {domain && (<><span className="text-[#333]">·</span><p className="text-[10px] text-[#555] font-mono">{domain}</p></>)}
+                                {meta?.duration_s != null && (<><span className="text-[#333]">·</span><p className="text-[10px] text-[#555]">{meta.duration_s}s</p></>)}
+                            </div>
+
+                            {/* ← FUERA del flex div, aquí abajo */}
+                            {meta?.log && meta.log.length > 0 && (
+                                <div className="mt-2 border border-white/5 rounded-lg overflow-hidden">
+                                    <div className="px-2 py-1 bg-white/[0.03] border-b border-white/5">
+                                        <span className="text-[8px] font-black text-[#444] uppercase tracking-widest">
+                                            Detalle de proxies ({meta.log.length})
+                                        </span>
+                                    </div>
+                                    <div className="p-2 space-y-0.5 font-mono text-[10px] max-h-32 overflow-y-auto custom-scrollbar">
+                                        {meta.log.map((line: string, i: number) => (
+                                            <div key={i} className={`flex items-start gap-1.5 ${
+                                                line.startsWith('✓') ? 'text-green-500' :
+                                                line.startsWith('↺') ? 'text-blue-400' :
+                                                'text-red-400'
+                                            }`}>
+                                                <span className="shrink-0 text-[#333] tabular-nums">{String(i+1).padStart(2,'0')}</span>
+                                                <span>{line}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        <p className="text-[10px] text-[#666] mt-0.5">{ev.source}</p>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center pr-2">
+                            <ChevronRight size={14} className="text-[#444]" />
+                        </div>
                     </div>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center pr-2">
-                        <ChevronRight size={14} className="text-[#444]" />
-                    </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     </div>
 );
-
 // --- SERVICE STATUS BAR ---
 export const ServiceStatusBar = ({ services, onServiceClick }: { services: ServiceStatus[], onServiceClick: (svc: ServiceStatus) => void }) => (
     <div className="flex flex-wrap gap-2">
@@ -492,27 +537,44 @@ export const SettingsPanel = ({ backupStatus, onTriggerBackup }: { backupStatus?
     </div>
 );
 // --- CONNECTION ROW ---
-export const ConnectionRow = ({ conn }: { conn: import('../types/orchestratorTypes').ConnectionItem }) => {
-    const isOk = conn.status === 'OK';
-    const isDown = conn.status === 'DOWN';
+export const ConnectionRow = ({ conn, linkedProfiles = [], onHistory }: {
+    conn: import('../types/orchestratorTypes').ConnectionItem;
+    linkedProfiles?: import('../types/orchestratorTypes').ProfileItem[];
+    onHistory?: () => void;  // ← AGREGAR
+}) => {
 
-    // Sparkline simulation (just simple bars for now)
+    const isOk   = conn.status === 'OK';
+    const isDown = conn.status === 'DOWN';
     const historyMax = Math.max(...conn.latencyHistory, 1);
 
     return (
         <div className="flex items-center justify-between p-4 bg-[#0a0a0a] border border-white/5 hover:border-[#00ff88]/30 rounded-xl transition-all mb-2">
-            <div className="flex items-center gap-4">
-                <div className={`p-2 rounded-lg ${isOk ? 'bg-[#00ff88]/10 text-[#00ff88]' : isDown ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className={`p-2 rounded-lg shrink-0 ${isOk ? 'bg-[#00ff88]/10 text-[#00ff88]' : isDown ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>
                     {isOk ? <Globe size={18} /> : isDown ? <WifiOff size={18} /> : <AlertTriangle size={18} />}
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                     <h4 className="text-xs font-black text-white uppercase tracking-wide">{conn.url}</h4>
-                    <p className="text-[9px] text-[#666] font-mono mt-0.5">ID: {conn.id} • Node: {conn.nodeId}</p>
+                    <p className="text-[9px] text-[#666] font-mono mt-0.5">
+                        ID: {conn.id} • Node: {conn.nodeId}
+                        {conn.sessionId && <> • Sesión: <span className="text-[#444]">{conn.sessionId.slice(0, 8)}</span></>}
+                    </p>
+                    {/* ← PERFILES ENLAZADOS */}
+                    {linkedProfiles.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                            {linkedProfiles.map(p => (
+                                <span key={p.id} className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[9px] text-[#888] font-mono">
+                                    {p.name}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    {linkedProfiles.length === 0 && (
+                        <p className="text-[9px] text-[#333] mt-1 italic">Sin perfiles enlazados</p>
+                    )}
                 </div>
             </div>
-
-            <div className="flex items-center gap-6">
-                {/* Mini Sparkline */}
+            <div className="flex items-center gap-6 shrink-0">
                 <div className="flex items-end gap-0.5 h-6 w-16">
                     {conn.latencyHistory.map((val, i) => (
                         <div
@@ -522,21 +584,26 @@ export const ConnectionRow = ({ conn }: { conn: import('../types/orchestratorTyp
                         />
                     ))}
                 </div>
-
                 <div className="text-right min-w-[60px]">
                     <div className={`text-xs font-black ${isOk ? 'text-[#00ff88]' : 'text-red-500'}`}>
                         {conn.latency}ms
                     </div>
                     <div className="text-[9px] text-[#555] uppercase">{conn.status}</div>
                 </div>
-
-                <button className="p-2 hover:bg-white/10 rounded-lg text-[#666] hover:text-white transition-colors">
-                    <MoreHorizontal size={16} />
-                </button>
+                    <button
+                        onClick={onHistory}  // ← CONECTAR
+                        className="p-2 hover:bg-white/10 rounded-lg text-[#666] hover:text-white transition-colors"
+                    >
+                        <MoreHorizontal size={16} />
+                    </button>
             </div>
         </div>
     );
 };
+
+    // ... resto igual, solo cambiar el botón:
+
+
 
 // --- AGENT ACTION BUTTON ---
 export const AgentActionButton = ({ label, icon, onClick, color, bg, desc }: any) => (

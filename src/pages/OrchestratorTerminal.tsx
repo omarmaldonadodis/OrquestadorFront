@@ -22,7 +22,8 @@ import {
     NodeItemDrawer, AlertModal, SessionHistoryModal,
     DashKPIModal, DashFiltersDrawer, HealthDetailModal, ServiceDetailModal,
     SecurityCheckModal, SessionStartModal, CreateProfileModal, EventDetailModal,
-    SystemDiagnosticModal, ResourceDetailModal, JobQueueModal
+    SystemDiagnosticModal, ResourceDetailModal, JobQueueModal,
+    ProxyHistoryModal
 } from '@/components/OrchestratorDrawers';
 
 // ─── HELPER ──────────────────────────────────────────────────────────────────
@@ -96,6 +97,15 @@ const OrchestratorTerminal: React.FC = () => {
     const [refreshing, setRefreshing]   = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
 
+    const rotationLogRef = useRef<string[]>([]);
+    const lastMetricLogRef = useRef<Map<string, number>>(new Map());
+
+    const [selectedConn, setSelectedConn] = useState<ConnectionItem | null>(null);
+    
+
+
+
+
     const getInitialTab = () => {
         const t = searchParams.get('tab');
         return (t === 'NODES' || t === 'PROFILES' || t === 'ALERTS' || t === 'CONNECTIONS' || t === 'SETTINGS') ? t : 'DASHBOARD';
@@ -128,6 +138,19 @@ const OrchestratorTerminal: React.FC = () => {
      * CRASH FIX: debounce para agrupar eventos de sesión.
      */
     const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const fetchingRef = useRef(false); // ← FIX: guard contra fetches simultáneos
+
+    const alertsEndRef = useRef<HTMLDivElement>(null);
+    const [rotationInProgress, setRotationInProgress] = useState(false);
+
+    // 1. Derivar evento LIVE desde el array (agrega junto a liveSelectedNode):
+    const liveSelectedEvent = useMemo(
+        () => selectedEvent
+            ? events.find(e => e.id === selectedEvent.id) ?? selectedEvent
+            : null,
+        [events, selectedEvent]
+    );
+
 
     /**
      * autoRefresh como ref para que handleWSEvent no tenga que redeclararse
@@ -179,6 +202,8 @@ const OrchestratorTerminal: React.FC = () => {
 
     // ─── FETCH ────────────────────────────────────────────────────
     const fetchData = useCallback(async () => {
+        if (fetchingRef.current) return;   // ← FIX: si ya hay un fetch en curso, ignorar
+        fetchingRef.current = true;
         setRefreshing(true);
         try {
             const [s, n, p, a, e, svc, c, b] = await Promise.all([
@@ -221,22 +246,40 @@ const OrchestratorTerminal: React.FC = () => {
         } catch (err) {
             console.error('[OrchestratorTerminal] fetchData failed:', err);
         } finally {
-            setRefreshing(false);
-            setLoading(false);
+                fetchingRef.current = false;   // ← FIX: liberar el guard siempre
+                setRefreshing(false);
+                setLoading(false);
         }
     }, []);
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
+    // Después del useEffect de activeTab:
+    useEffect(() => {
+    if (activeTab === 'ALERTS' && alertsEndRef.current) {
+        alertsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+    }, [activeTab, alerts]);
+
     // ─── DEBOUNCED FETCH ──────────────────────────────────────────
     const debouncedFetch = useCallback(() => {
         if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current);
-        fetchDebounceRef.current = setTimeout(fetchData, 2_000);
+        fetchDebounceRef.current = setTimeout(() => {
+            // ← FIX: tabs ocultas no fetchean — solo la tab activa lo hace
+            if (!document.hidden) fetchData();
+        }, 4_000); // aumentado de 2s a 4s para dar más margen con múltiples tabs
     }, [fetchData]);
 
     // ─── WS CALLBACK ─────────────────────────────────────────────
     const handleWSEvent = useCallback((event: any) => {
 
+        if (!['agent_metrics', 'pong'].includes(event.type)) {
+            console.log('[WS]', event.type, event.event ?? '', JSON.stringify(event).slice(0, 150));
+        }
+
+        if (['session_created', 'session_active', 'session_closed', 'browser_event'].includes(event.type)) {
+            console.log('[WS RAW EVENT]', JSON.stringify(event, null, 2));
+        }
         if (event.type === 'session_created' || event.type === 'session_active') {
             setEvents(prev => [{
                 id:        `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -244,6 +287,7 @@ const OrchestratorTerminal: React.FC = () => {
                 message:   event.message ?? `Sesión creada — ${event.profile}`,
                 source:    event.agent_name ?? 'Agent',
                 timestamp: new Date().toLocaleTimeString(),
+                meta:      { session_id: event.session_id },
             }, ...prev.slice(0, 18)]);
             if (autoRefreshRef.current) debouncedFetch();
         }
@@ -255,6 +299,8 @@ const OrchestratorTerminal: React.FC = () => {
                 message:   `Sesión cerrada — ${event.duration_seconds ?? 0}s`,
                 source:    event.agent_name ?? 'Agent',
                 timestamp: new Date().toLocaleTimeString(),
+                meta:      { session_id: event.session_id },   // ← ADD
+
             }, ...prev.slice(0, 18)]);
             if (autoRefreshRef.current) debouncedFetch();
         }
@@ -268,7 +314,6 @@ const OrchestratorTerminal: React.FC = () => {
 
             if (!cid) return;
 
-            // Solo actualizar nodo y charts si hay datos reales del SO (ram > 0)
             if (ram > 0) {
                 setNodes(prev => prev.map(n => {
                     if (n.id.toString() !== cid) return n;
@@ -287,20 +332,20 @@ const OrchestratorTerminal: React.FC = () => {
                         ...prev.slice(-29),
                         { time: new Date().toLocaleTimeString(), cpu: Math.round(cpu), ram: Math.round(ram) },
                     ]);
+
+                    // ← THROTTLE: solo loguear métricas cada 30s
+                    const lastLog = lastMetricLogRef.current.get(cid) ?? 0;
+                    if (Date.now() - lastLog >= 30_000) {
+                        lastMetricLogRef.current.set(cid, Date.now());
+                        setNodeLogs(prev => [...prev, {
+                            timestamp: new Date().toISOString(),
+                            level:     'INFO',
+                            message:   `cpu=${cpu.toFixed(1)}% mem=${ram.toFixed(1)}% disk=${disk.toFixed(1)}%`,
+                        }].slice(-100));
+                    }
                 }
             }
-
-            // FIX: actualizar logs SIEMPRE (independiente del guard ram===0)
-            // Los logs muestran cualquier evento del agente, no solo métricas del SO
-            if (selectedNodeRef.current?.id.toString() === cid) {
-                setNodeLogs(prev => [...prev, {
-                    timestamp: new Date().toISOString(),
-                    level:     'INFO',
-                    message:   `cpu=${cpu.toFixed(1)}% mem=${ram.toFixed(1)}% disk=${disk.toFixed(1)}%`,
-                }].slice(-100));
-            }
         }
-
         if (event.type === 'agent_log') {
             if (selectedNodeRef.current?.id.toString() === event.computer_id?.toString()) {
                 setNodeLogs(prev => [...prev, event.log].slice(-100));
@@ -329,6 +374,58 @@ const OrchestratorTerminal: React.FC = () => {
             setNodes(prev => prev.map(n =>
                 n.id.toString() === cid ? { ...n, status: 'OFFLINE' as const, uptime: '—' } : n
             ));
+        }
+
+        if (event.type === 'rotation_progress') {
+            const s = event.stats;
+            const icon = event.result === 'ok' ? '✓' : event.result === 'rotated' ? '↺' : '✗';
+            rotationLogRef.current = [...rotationLogRef.current, `${icon} ${event.detail}`];
+            // Actualizar el evento "iniciada..." en el timeline con contador live
+            setEvents(prev => prev.map(e =>
+                (e.source === 'proxy_rotation') && (e.message.startsWith('Rotando') || e.message.includes('iniciada'))
+                    ? {
+                        ...e,
+                        message: `Rotando proxies — ${s.optimal}✓ ${s.rotated}↺ ${s.failed}✗ / ${s.total}`,
+                        type: 'INFO' as const,
+                        meta: { log: [...rotationLogRef.current] }, 
+                    }
+                    : e
+            ));
+            return;
+        }
+
+        if (event.type === 'system_event' && event.event === 'proxy_rotation_complete') {
+            const s = event.stats;
+            const ok = s.failed === 0;
+            const capturedLog = [...rotationLogRef.current];
+            rotationLogRef.current = [];
+
+            const completionEvent = {
+                id: 'ws-rotation-active',
+                type: (ok ? 'SUCCESS' : 'ERROR') as const,
+                message: `Rotación completada — ${s.optimal} óptimos · ${s.rotated} rotados · ${s.failed} fallidos`,
+                source: 'proxy_rotation',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: { log: capturedLog },
+            };
+
+            setEvents(prev => {
+                const filtered = prev.filter(e => !(
+                    e.source === 'proxy_rotation' &&
+                    (e.message.includes('iniciada') || e.message.startsWith('Rotando'))
+                ));
+                return [completionEvent, ...filtered.slice(0, 17)];
+            });
+
+            // ← AGREGAR: actualizar selectedEvent con el log completo
+            // Así cuando fetchData reemplaza events[], el fallback ya tiene capturedLog
+            setSelectedEvent(prev =>
+                prev?.id === 'ws-rotation-active' ? completionEvent : prev
+            );
+
+            setRotationInProgress(false);
+            if (autoRefreshRef.current) debouncedFetch();
+            return;
         }
 
     }, [debouncedFetch]);
@@ -406,9 +503,26 @@ const OrchestratorTerminal: React.FC = () => {
     const handleTriggerBackup = async () => { try { await orchestratorService.triggerBackup(); alert('Backup encolado'); } catch { alert('Error backup'); } };
     const handleRotateProxies = async () => {
         if (!window.confirm('¿Rotar proxies lentos?')) return;
-        try { await orchestratorService.rotateAllProxies(); alert('Rotación iniciada'); } catch { alert('Error proxies'); }
-    };
+        try {
+            setRotationInProgress(true);
+            // Mostrar inmediatamente en timeline sin esperar al WS
+            rotationLogRef.current = []; // ← AGREGAR esta línea
 
+            // 3. En handleRotateProxies — también usar ese id fijo:
+            setEvents(prev => [{
+                id: 'ws-rotation-active',  // ← mismo id fijo
+                type: 'INFO' as const,
+                message: 'Rotación de proxies iniciada...',
+                source: 'proxy_rotation',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 18)]);
+            await orchestratorService.rotateAllProxies();
+        } catch {
+            setRotationInProgress(false);
+            alert('Error proxies');
+        }
+    };
     // ─── RENDER ───────────────────────────────────────────────────
     return (
         <div className="w-full h-full bg-[#020202] text-[#f0f0f0] flex overflow-hidden font-sans selection:bg-[#00ff88]/30">
@@ -487,7 +601,12 @@ const OrchestratorTerminal: React.FC = () => {
                                         <MiniCapacityPanel cpu={Math.round(nodes.reduce((a, b) => a + b.cpu, 0) / (nodes.length || 1))} ram={Math.round(nodes.reduce((a, b) => a + b.ram, 0) / (nodes.length || 1))} net={45} onClick={() => setShowResourceDetail(true)} />
                                     </div>
                                     <div className="lg:col-span-1 h-full">
-                                        <JobsQueueWidget queue={0} running={stats?.browsersOpen ?? 0} failed={alerts.filter(a => !a.read).length} onClick={() => setShowJobQueue(true)} />
+                                        <JobsQueueWidget
+                                            queue={0}
+                                            running={(stats?.browsersOpen ?? 0) + (rotationInProgress ? 1 : 0)}
+                                            failed={alerts.filter(a => !a.read && a.source !== 'proxy_rotation').length}
+                                            onClick={() => setShowJobQueue(true)}
+                                        />
                                     </div>
                                 </section>
 
@@ -562,8 +681,15 @@ const OrchestratorTerminal: React.FC = () => {
                                     ) : (
                                         <>
                                             {activeTab === 'NODES'       && visibleContent.map((n: any) => <ComputerRow  key={n.id} node={n} onClick={() => handleNodeClick(n)} />)}
-                                            {activeTab === 'CONNECTIONS' && visibleContent.map((c: any) => <ConnectionRow key={c.id} conn={c} />)}
-                                            {activeTab === 'PROFILES' && (
+                                            {activeTab === 'CONNECTIONS' && visibleContent.map((c: any) => (
+                                                <ConnectionRow
+                                                    key={c.id}
+                                                    conn={c}
+                                                    linkedProfiles={profiles.filter(p => (p as any).proxyId === Number(c.id))}
+                                                    onHistory={() => setSelectedConn(c)}
+                                                />
+                                            ))}
+                                           {activeTab === 'PROFILES' && (
                                                 <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl overflow-hidden">
                                                     <div className="grid grid-cols-12 gap-4 p-3 border-b border-white/5 text-[9px] font-black text-[#666] uppercase tracking-wider pl-4">
                                                         <div className="col-span-3">Perfil</div>
@@ -577,13 +703,14 @@ const OrchestratorTerminal: React.FC = () => {
                                                     ))}
                                                 </div>
                                             )}
-                                            {activeTab === 'ALERTS' && visibleContent.map((a: any) => (
+                                                {activeTab === 'ALERTS' && [...visibleContent].reverse().map((a: any) => (
                                                 <AlertItem key={a.id} alert={a} onRead={() => setSelectedAlert(a)} onAction={(action: string) => {
                                                     if (action === 'SILENCE')    handleAlertSilence(a.id);
                                                     if (action === 'RETRY')      fetchData();
                                                     if (action === 'VIEW_CAUSE') setSelectedAlert(a);
                                                 }} />
-                                            ))}
+                                                ))}
+                                                {activeTab === 'ALERTS' && <div ref={alertsEndRef} className="h-1" />}
                                             {visibleContent.length === 0 && (
                                                 <div className="p-12 text-center border border-dashed border-white/5 rounded-2xl">
                                                     <p className="text-[#444] text-xs font-bold uppercase">No data found</p>
@@ -603,7 +730,7 @@ const OrchestratorTerminal: React.FC = () => {
                     </div>
                 </main>
 
-                <EventDetailModal       event={selectedEvent}       onClose={() => setSelectedEvent(null)} />
+                <EventDetailModal       event={liveSelectedEvent}   onClose={() => setSelectedEvent(null)} />
                 <SystemDiagnosticModal  isOpen={showSystemDiag}     onClose={() => setShowSystemDiag(false)} />
                 <ResourceDetailModal    isOpen={showResourceDetail} onClose={() => setShowResourceDetail(false)} />
                 <JobQueueModal          isOpen={showJobQueue}       onClose={() => setShowJobQueue(false)} />
@@ -628,6 +755,7 @@ const OrchestratorTerminal: React.FC = () => {
                         } catch { alert('Error al crear el perfil.'); }
                     }}
                 />
+                <ProxyHistoryModal conn={selectedConn} onClose={() => setSelectedConn(null)} />
             </div>
         </div>
     );

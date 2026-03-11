@@ -11,16 +11,44 @@ interface NodeDrawerProps {
     onClose: () => void;
 }
 
-export const EventDetailModal = ({ event, onClose }: { event: import('../types/orchestratorTypes').SystemEvent | null, onClose: () => void }) => {
+export const EventDetailModal = ({ event, onClose }: {
+    event: import('../types/orchestratorTypes').SystemEvent | null;
+    onClose: () => void;
+}) => {
+    const [pages, setPages] = React.useState<{ id: number; url: string; title?: string; timestamp: string }[]>([]);
+    const [loadingPages, setLoadingPages] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!event) { setPages([]); return; }
+        const sid = (event as any).meta?.session_id;
+        if (!sid) return;
+        setLoadingPages(true);
+        fetch(`/api/v1/admin/sessions/${sid}/events`)
+            .then(r => r.json())
+            .then(data => setPages(data.events ?? []))
+            .catch(() => setPages([]))
+            .finally(() => setLoadingPages(false));
+    }, [event]);
+
     if (!event) return null;
+
+    const proxyLog: string[] = (event as any).meta?.log ?? [];
+    const hasProxyLog = proxyLog.length > 0;
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-sm relative z-[110] p-6 shadow-2xl animate-fade-in-up">
                 <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white"><X size={20} /></button>
-                <div className={`size-12 rounded-xl flex items-center justify-center mb-4 ${event.type === 'SUCCESS' ? 'bg-[#00ff88]/10 text-[#00ff88]' : event.type === 'ERROR' ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}>
+
+                <div className={`size-12 rounded-xl flex items-center justify-center mb-4 ${
+                    event.type === 'SUCCESS' ? 'bg-[#00ff88]/10 text-[#00ff88]' :
+                    event.type === 'ERROR'   ? 'bg-red-500/10 text-red-500'     :
+                                               'bg-blue-500/10 text-blue-500'
+                }`}>
                     <Activity size={24} />
                 </div>
+
                 <h3 className="text-lg font-black text-white italic mb-1">Detalle del Evento</h3>
                 <p className="text-xs text-[#666] mb-4 font-mono">{event.timestamp}</p>
 
@@ -28,6 +56,64 @@ export const EventDetailModal = ({ event, onClose }: { event: import('../types/o
                     <p className="text-sm font-bold text-white mb-2">{event.message}</p>
                     <p className="text-xs text-[#888] uppercase">Origen: {event.source}</p>
                 </div>
+
+                {/* PROXY LOG — mismo estilo que Páginas Visitadas */}
+                {hasProxyLog && (
+                    <div className="mb-4">
+                        <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <RefreshCw size={10} /> Detalle de proxies
+                        </p>
+                        <div className="bg-[#080808] border border-white/5 rounded-xl overflow-hidden">
+                            <div className="max-h-44 overflow-y-auto custom-scrollbar">
+                                {proxyLog.map((line, i) => {
+                                    const isOk      = line.startsWith('✓');
+                                    const isRotated = line.startsWith('↺');
+                                    return (
+                                        <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.04] last:border-0">
+                                            <p className={`text-[10px] font-mono truncate flex-1 ${
+                                                isOk      ? 'text-[#888]' :
+                                                isRotated ? 'text-blue-400' :
+                                                            'text-red-400'
+                                            }`}>
+                                                {line.slice(2)}
+                                            </p>
+                                            <span className={`text-[9px] font-black uppercase shrink-0 px-1.5 py-0.5 rounded ${
+                                                isOk      ? 'text-[#00ff88] bg-[#00ff88]/10' :
+                                                isRotated ? 'text-blue-400 bg-blue-400/10'   :
+                                                            'text-red-400 bg-red-400/10'
+                                            }`}>
+                                                {isOk ? 'OK' : isRotated ? 'ROTADO' : 'FALLO'}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* PÁGINAS VISITADAS */}
+                {(loadingPages || pages.length > 0) && (
+                    <div className="mb-4">
+                        <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <History size={10} /> Páginas visitadas
+                        </p>
+                        <div className="bg-[#080808] border border-white/5 rounded-xl max-h-40 overflow-y-auto custom-scrollbar">
+                            {loadingPages ? (
+                                <p className="text-[10px] text-[#444] animate-pulse p-3">Cargando...</p>
+                            ) : pages.map((p, i) => (
+                                <div key={p.id ?? i} className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.04] last:border-0">
+                                    <p className="text-[10px] text-[#888] truncate flex-1">
+                                        {(() => { try { return new URL(p.url).hostname; } catch { return p.url; } })()}
+                                    </p>
+                                    <p className="text-[9px] text-[#555] font-mono shrink-0">
+                                        {new Date(p.timestamp).toLocaleTimeString()}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <button onClick={onClose} className="w-full py-3 bg-[#00ff88] text-black font-black uppercase rounded-xl text-xs hover:bg-[#00cc6a] transition-colors">
                     Entendido
@@ -304,6 +390,29 @@ export const SessionHistoryModal = ({
                                     <p className="text-[10px] text-[#666] mt-0.5 font-mono uppercase">
                                         {ev.type} • {ev.source}
                                     </p>
+
+                                    // Después de donde muestra ev.message y ev.source, agrega:
+                                    {event?.meta?.log && event.meta.log.length > 0 && (
+                                        <div className="mt-3 p-3 bg-black/40 rounded-xl border border-white/5">
+                                            <p className="text-[9px] font-black text-[#444] uppercase mb-2">Detalle por proxy</p>
+                                            <div className="space-y-0.5 font-mono text-[10px]">
+                                                {event.meta.log.map((line: string, i: number) => (
+                                                    <div key={i} className={
+                                                        line.startsWith('✓') ? 'text-green-500' :
+                                                        line.startsWith('↺') ? 'text-blue-400' :
+                                                        'text-red-400'
+                                                    }>
+                                                        {line}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Si viene del activity feed (meta.message del alert) */}
+                                    {event?.meta?.message && (
+                                        <p className="mt-2 text-xs text-[#888] font-mono">{event.meta.message}</p>
+                                    )}
                                     {ev.type === 'ERROR' && (
                                         <p className="mt-1 text-[9px] font-black text-red-500 uppercase flex items-center gap-1">
                                             <AlertTriangle size={10} /> Error en sesión
@@ -1453,6 +1562,135 @@ export const JobQueueModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: (
                         Limpiar Fallidos
                     </button>
                 </div>
+            </div>
+        </div>
+    );
+};
+
+export const ProxyHistoryModal = ({
+    conn,
+    onClose,
+}: {
+    conn: import('../types/orchestratorTypes').ConnectionItem | null;
+    onClose: () => void;
+}) => {
+    const [logs, setLogs]       = React.useState<any[]>([]);
+    const [loading, setLoading] = React.useState(false);
+
+    React.useEffect(() => {
+        if (!conn) { setLogs([]); return; }
+        setLoading(true);
+        fetch(`/api/v1/proxy-rotation/${conn.id}/history`)
+            .then(r => r.json())
+            .then(d => setLogs(d.items ?? []))
+            .catch(() => setLogs([]))
+            .finally(() => setLoading(false));
+    }, [conn]);
+
+    if (!conn) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+            <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-md relative z-[110] p-6 shadow-2xl animate-fade-in-up flex flex-col max-h-[80vh]">
+                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white">
+                    <X size={20} />
+                </button>
+
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-1">
+                    <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500">
+                        <RefreshCw size={22} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-black text-white italic">Historial de Rotación</h3>
+                        <p className="text-[10px] text-[#555] font-mono">{conn.url}</p>
+                    </div>
+                </div>
+
+                {/* Contador */}
+                <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-4 ml-1">
+                    {logs.length} rotaciones registradas
+                </p>
+
+                {/* Lista */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    {loading ? (
+                        <div className="py-12 text-center">
+                            <p className="text-[10px] text-[#444] animate-pulse uppercase tracking-widest">Cargando...</p>
+                        </div>
+                    ) : logs.length === 0 ? (
+                        <div className="py-12 text-center border border-dashed border-white/5 rounded-xl">
+                            <RefreshCw size={20} className="text-[#333] mx-auto mb-2" />
+                            <p className="text-[10px] text-[#333] uppercase">Sin rotaciones registradas</p>
+                        </div>
+                    ) : (
+                        <div className="border border-white/5 rounded-xl overflow-hidden">
+                            {logs.map((log) => (
+                                <div key={log.id} className="flex items-start gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
+
+                                    {/* Icono estado */}
+                                    <div className={`shrink-0 size-7 rounded-lg flex items-center justify-center mt-0.5 ${
+                                        log.success
+                                            ? 'bg-blue-500/10 text-blue-400'
+                                            : 'bg-red-500/10 text-red-400'
+                                    }`}>
+                                        {log.success
+                                            ? <RefreshCw size={12} />
+                                            : <AlertTriangle size={12} />
+                                        }
+                                    </div>
+
+                                    {/* Info */}
+                                    <div className="flex-1 ">
+                                        {log.success ? (
+                                            <>
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+
+                                                    <span className="text-[10px] text-[#888] font-mono break-all">
+                                                        {log.old_proxy}
+                                                    </span>
+                                                    <span className="text-[10px] text-blue-400 font-mono break-all">
+                                                        {log.new_proxy}
+                                                    </span>
+                                                    <span className="text-[9px] text-[#555] mt-0.5 font-mono break-all">
+                                                        {log.error_message ?? 'Error desconocido'}
+                                                    </span>
+                                                </div>
+                                                {log.latency_ms && (
+                                                    <p className="text-[9px] text-[#555] mt-0.5">
+                                                        latencia previa: {Math.round(log.latency_ms)}ms
+                                                    </p>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-[10px] font-black text-red-400 uppercase">Falló</p>
+                                                <p className="text-[9px] text-[#555] mt-0.5 font-mono truncate">
+                                                    {log.error_message ?? 'Error desconocido'}
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Fecha */}
+                                    <div className="text-right shrink-0">
+                                        <p className="text-[9px] text-[#555] font-mono">
+                                            {new Date(log.rotated_at).toLocaleDateString()}
+                                        </p>
+                                        <p className="text-[9px] text-[#444] font-mono">
+                                            {new Date(log.rotated_at).toLocaleTimeString()}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <button onClick={onClose} className="mt-4 w-full py-3 bg-[#00ff88] text-black font-black uppercase rounded-xl text-xs hover:bg-[#00cc6a] transition-colors">
+                    Entendido
+                </button>
             </div>
         </div>
     );
