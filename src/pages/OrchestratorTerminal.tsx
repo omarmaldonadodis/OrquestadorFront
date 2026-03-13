@@ -3,7 +3,8 @@ import {
     LayoutDashboard, Server, Users, Bell, Search, Filter,
     CheckCircle2, AlertTriangle, Monitor, History,
     Terminal as TerminalIcon, Settings, Plus, ExternalLink, RefreshCw,
-    Globe
+    Globe,
+    Shield
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { orchestratorService } from '@/services/orchestrator.service';
@@ -151,6 +152,8 @@ const OrchestratorTerminal: React.FC = () => {
         [events, selectedEvent]
     );
 
+    
+
 
     /**
      * autoRefresh como ref para que handleWSEvent no tenga que redeclararse
@@ -164,6 +167,8 @@ const OrchestratorTerminal: React.FC = () => {
         () => nodes.find(n => n.id === selectedNode?.id) ?? selectedNode,
         [nodes, selectedNode]
     );
+
+    
 
     const visibleContent = useMemo(() => {
         const q = searchText.toLowerCase();
@@ -636,6 +641,8 @@ const OrchestratorTerminal: React.FC = () => {
                                             { label: 'Nuevo Perfil',    desc: 'Crear navegador y credenciales', icon: <Plus size={24} />,      color: '#ffffff', fn: () => setShowCreateProfile(true) },
                                             { label: 'Monitor de Red',  desc: 'Rotar proxies lentos ahora',    icon: <RefreshCw size={24} />, color: '#3b82f6', fn: handleRotateProxies },
                                             { label: 'Logs de Sistema', desc: 'Ver alertas y eventos',         icon: <History size={24} />,   color: '#f59e0b', fn: () => setActiveTab('ALERTS') },
+                                            { label: 'Verificar Perfiles', desc: 'Actualizar scores y cookies', icon: <Shield size={24} />, color: '#00ff88', 
+                                                fn: () => fetch('/api/v1/profiles/verify-all', { method: 'POST' }) },
                                         ] as const).map(({ label, desc, icon, color, fn }) => (
                                             <div key={label} onClick={fn} className="group cursor-pointer bg-[#0a0a0a] border border-white/5 hover:border-white/20 p-4 rounded-xl transition-all relative overflow-hidden">
                                                 <div className="absolute inset-0 bg-white/[0.03] translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
@@ -695,11 +702,11 @@ const OrchestratorTerminal: React.FC = () => {
                                                         <div className="col-span-3">Perfil</div>
                                                         <div className="col-span-2 hidden md:block">Proxy</div>
                                                         <div className="col-span-2 hidden md:block">Cookies</div>
-                                                        <div className="col-span-2">Nodo</div>
+                                                        <div className="col-span-2">Escore</div>
                                                         <div className="col-span-2 text-right pr-4">Acciones</div>
                                                     </div>
                                                     {(visibleContent as ProfileItem[]).map(p => (
-                                                        <ProfileRow key={p.id} profile={p} onHistory={() => handleViewProfileHistory(p.id)} onSecurity={() => setSecurityProfile(p)} />
+                                                        <ProfileRow key={p.id} profile={p} connections={connections} onHistory={() => handleViewProfileHistory(p.id)} onSecurity={() => setSecurityProfile(p)} />
                                                     ))}
                                                 </div>
                                             )}

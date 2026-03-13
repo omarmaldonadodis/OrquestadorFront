@@ -814,12 +814,14 @@ export const SecurityCheckModal = ({ profile, onClose, onVerify }: { profile: im
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className={`p-4 rounded-xl border ${browserScore > 90 ? 'bg-[#00ff88]/5 border-[#00ff88]/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                    <div className={`p-4 rounded-xl border ${browserScore >= 80 ? 'bg-[#00ff88]/5 border-[#00ff88]/20' : browserScore >= 60 ? 'bg-amber-500/5 border-amber-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-[10px] font-black uppercase text-[#888]">Browser Score</span>
-                            <Fingerprint size={16} className={browserScore > 90 ? 'text-[#00ff88]' : 'text-red-500'} />
+                        <Fingerprint size={16} className={browserScore >= 80 ? 'text-[#00ff88]' : browserScore >= 60 ? 'text-amber-500' : 'text-red-500'} />
                         </div>
-                        <p className={`text-3xl font-black ${browserScore > 90 ? 'text-[#00ff88]' : 'text-red-500'}`}>{browserScore}%</p>
+                        <p className={`text-3xl font-black ${browserScore >= 80 ? 'text-[#00ff88]' : browserScore >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
+                            {browserScore}%
+                        </p>
                         <p className="text-[9px] text-[#666] mt-1">Integridad de huella digital</p>
                     </div>
 
@@ -835,12 +837,17 @@ export const SecurityCheckModal = ({ profile, onClose, onVerify }: { profile: im
 
                 <div className="bg-[#0a0a0a] border border-white/5 rounded-xl p-4 mb-6">
                     <div className="flex items-center gap-3 mb-3">
-                        {isCookiesOk && browserScore > 90 ? <CheckCircle2 size={16} className="text-[#00ff88]" /> : <AlertTriangle size={16} className="text-amber-500" />}
-                        <span className="text-xs font-bold text-[#ccc]">
-                            {isCookiesOk && browserScore > 90 ? 'Perfil verificado y seguro.' : 'Se requiere atención manual.'}
+                        {isCookiesOk && browserScore > 60 ? <CheckCircle2 size={16} className="text-[#00ff88]" /> : <AlertTriangle size={16} className="text-amber-500" />}
+                        <span>
+                            {isCookiesOk && browserScore >= 60 ? 'Perfil verificado y seguro. Navega para subir el score' : 'Se requiere atención manual.'}
                         </span>
+                        {(!isCookiesOk || browserScore < 60) && (
+                        <div>
+                            {!isCookiesOk ? 'Acción Requerida: Actualizar Cookies' : `Score bajo (${browserScore}%) — Usar el perfil para subir score`}
+                        </div>
+)}
                     </div>
-                    {(!isCookiesOk || browserScore < 90) && (
+                    {(!isCookiesOk || browserScore < 60) && (
                         <div className="bg-red-500/10 text-red-500 text-[10px] p-2 rounded border border-red-500/20 font-bold uppercase">
                             Acción Requerida: Actualizar Cookies
                         </div>
@@ -995,7 +1002,7 @@ export const SessionStartModal = ({ isOpen, onClose, profiles, onStart }: { isOp
                                         <span className={`text-[10px] font-bold ${p.health > 80 ? 'text-[#00ff88]' : 'text-red-500'}`}>{p.health}%</span>
                                     </div>
                                     <div className="col-span-2 flex justify-center gap-1">
-                                        {(p.browserScore || 0) > 90 ? <Shield size={12} className="text-[#00ff88]" /> : <AlertTriangle size={12} className="text-amber-500" />}
+                                        {(p.browserScore || 0) > 60 ? <Shield size={12} className="text-[#00ff88]" /> : <AlertTriangle size={12} className="text-amber-500" />}
                                     </div>
                                 </div>
                             ))

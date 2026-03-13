@@ -139,19 +139,36 @@ export const ProfileRow = ({ profile, onHistory, onSecurity }: { profile: Profil
                 <span>{profile.name}</span>
                 <span className="text-[9px] text-[#666] font-normal uppercase">{profile.owner || profile.id}</span>
             </div>
-            <div className="col-span-2">
-                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${getStatusStyle(profile.status)}`}>
-                    {profile.status}
+            <div className="col-span-2 hidden md:block">
+                {profile.proxyId ? (
+                    <div className="flex flex-col">
+                        <span className="text-[10px] text-[#00ff88] font-mono">{profile.adsId}</span>
+                        <span className="text-[9px] text-[#555] uppercase">{profile.proxy?.location ?? 'N/A'}</span>
+                    </div>
+                ) : (
+                    <span className="text-[10px] text-[#444]">Sin proxy</span>
+                )}
+            </div>
+
+            <div className="col-span-2 hidden md:block">
+                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${
+                    profile.cookieStatus === 'OK'
+                        ? 'text-[#00ff88] bg-[#00ff88]/10 border-[#00ff88]/20'
+                        : profile.cookieStatus === 'EXPIRED'
+                        ? 'text-amber-500 bg-amber-500/10 border-amber-500/20'
+                        : 'text-red-500 bg-red-500/10 border-red-500/20'
+                }`}>
+                    {profile.cookieStatus ?? 'N/A'}
                 </span>
             </div>
-            <div className="col-span-2 text-[#ccc] truncate" title={profile.nodeId}>
-                {profile.nodeId}
-            </div>
+
             <div className="col-span-2 hidden md:block">
-                <div className="flex items-center gap-2">
-                    <span className={`${profile.latency > 500 ? 'text-red-500' : 'text-[#00ff88]'}`}>{profile.latency}ms</span>
-                    <span className="text-[#444]">/</span>
-                    <span className={`${profile.memory > 800 ? 'text-amber-500' : 'text-blue-500'}`}>{profile.memory}MB</span>
+                <div className="flex items-center gap-1">
+                    <span className={`text-xs font-black ${
+                        (profile.browserScore || 0) >= 80 ? 'text-[#00ff88]' :
+                        (profile.browserScore || 0) >= 60 ? 'text-amber-500' : 'text-red-500'
+                    }`}>{profile.browserScore || 0}%</span>
+                    <span className="text-[9px] text-[#444] uppercase"></span>
                 </div>
             </div>
             <div className="col-span-2 hidden md:block text-[10px] text-[#666]">
