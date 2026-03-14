@@ -69,7 +69,9 @@ class OrchestratorService {
         lastUpdate:     c.lastUpdate ?? c.last_update ?? '—',
         // FIX: pasar connected_since para que OrchestratorTerminal siembre connectedAtRef
         // Sin esto el uptime siempre muestra "0m" porque el ref nunca se inicializa
-        connected_since: c.connected_since ?? null,
+        connected_since_ts: c.connected_since
+            ? new Date(c.connected_since).getTime()
+            : null, 
     }));
   }
 

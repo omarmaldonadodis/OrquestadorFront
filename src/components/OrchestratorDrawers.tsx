@@ -1,35 +1,37 @@
+// src/components/OrchestratorDrawers.tsx
 import React from 'react';
-import { ComputerNode, Alert } from '../types/orchestratorTypes';
-import { X, Activity, Cpu, HardDrive, Terminal, Clock, Shield, AlertTriangle, History, Cookie, Fingerprint, Play, Pause, RefreshCw, Server, CheckCircle2, ChevronRight, Plus, ExternalLink, Info } from 'lucide-react';
+import {
+    ComputerNode, Alert, SystemEvent, ConnectionItem, ProfileItem, ServiceStatus, Job, BackupStatus
+} from '../types/orchestratorTypes';
+import {
+    X, Activity, Cpu, HardDrive, Terminal, Clock, Shield, AlertTriangle,
+    History, Cookie, Fingerprint, Play, Pause, RefreshCw, Server,
+    CheckCircle2, ChevronRight, Plus, ExternalLink, Info
+} from 'lucide-react';
 
-
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 
 interface NodeDrawerProps {
-    node: ComputerNode | null;
-    history: { time: string, cpu: number, ram: number }[];
-    logs: { timestamp: string; level: string; message: string }[];  // ← agregar
+    node:    ComputerNode | null;
+    history: { time: string; cpu: number; ram: number }[];
+    logs:    { timestamp: string; level: string; message: string }[];
     onClose: () => void;
 }
 
-export const EventDetailModal = ({ event, onClose }: {
-    event: import('../types/orchestratorTypes').SystemEvent | null;
-    onClose: () => void;
+// ─── EVENT DETAIL MODAL ──────────────────────────────────────────────────────
+// Fetch eliminado — el padre maneja la carga y pasa pages como prop
+
+export const EventDetailModal = ({
+    event,
+    pages        = [],
+    loadingPages = false,
+    onClose,
+}: {
+    event:         SystemEvent | null;
+    pages?:        { id: number; url: string; timestamp: string }[];
+    loadingPages?: boolean;
+    onClose:       () => void;
 }) => {
-    const [pages, setPages] = React.useState<{ id: number; url: string; title?: string; timestamp: string }[]>([]);
-    const [loadingPages, setLoadingPages] = React.useState(false);
-
-    React.useEffect(() => {
-        if (!event) { setPages([]); return; }
-        const sid = (event as any).meta?.session_id;
-        if (!sid) return;
-        setLoadingPages(true);
-        fetch(`/api/v1/admin/sessions/${sid}/events`)
-            .then(r => r.json())
-            .then(data => setPages(data.events ?? []))
-            .catch(() => setPages([]))
-            .finally(() => setLoadingPages(false));
-    }, [event]);
-
     if (!event) return null;
 
     const proxyLog: string[] = (event as any).meta?.log ?? [];
@@ -39,7 +41,9 @@ export const EventDetailModal = ({ event, onClose }: {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-sm relative z-[110] p-6 shadow-2xl animate-fade-in-up">
-                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white"><X size={20} /></button>
+                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white">
+                    <X size={20} />
+                </button>
 
                 <div className={`size-12 rounded-xl flex items-center justify-center mb-4 ${
                     event.type === 'SUCCESS' ? 'bg-[#00ff88]/10 text-[#00ff88]' :
@@ -57,7 +61,7 @@ export const EventDetailModal = ({ event, onClose }: {
                     <p className="text-xs text-[#888] uppercase">Origen: {event.source}</p>
                 </div>
 
-                {/* PROXY LOG — mismo estilo que Páginas Visitadas */}
+                {/* PROXY LOG */}
                 {hasProxyLog && (
                     <div className="mb-4">
                         <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -71,9 +75,8 @@ export const EventDetailModal = ({ event, onClose }: {
                                     return (
                                         <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.04] last:border-0">
                                             <p className={`text-[10px] font-mono truncate flex-1 ${
-                                                isOk      ? 'text-[#888]' :
-                                                isRotated ? 'text-blue-400' :
-                                                            'text-red-400'
+                                                isOk      ? 'text-[#888]'   :
+                                                isRotated ? 'text-blue-400' : 'text-red-400'
                                             }`}>
                                                 {line.slice(2)}
                                             </p>
@@ -92,7 +95,7 @@ export const EventDetailModal = ({ event, onClose }: {
                     </div>
                 )}
 
-                {/* PÁGINAS VISITADAS */}
+                {/* PÁGINAS VISITADAS — datos vienen del padre */}
                 {(loadingPages || pages.length > 0) && (
                     <div className="mb-4">
                         <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -122,10 +125,12 @@ export const EventDetailModal = ({ event, onClose }: {
         </div>
     );
 };
-// ── REEMPLAZA NodeItemDrawer completo en OrchestratorDrawers.tsx ──
+
+// ─── NODE ITEM DRAWER ────────────────────────────────────────────────────────
 
 export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps) => {
     const logsEndRef = React.useRef<HTMLDivElement>(null);
+
     React.useEffect(() => {
         logsEndRef.current?.scrollIntoView({ behavior: 'instant' });
     }, [logs]);
@@ -133,10 +138,8 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
     if (!node) return null;
 
     const isOnline = node.status === 'ONLINE';
-
-    // Calcular max para normalizar barras (evita que cpu=2% sea invisible)
-    const maxCpu = Math.max(...history.map(p => p.cpu), 1);
-    const maxRam = Math.max(...history.map(p => p.ram), 1);
+    const maxCpu   = Math.max(...history.map(p => p.cpu), 1);
+    const maxRam   = Math.max(...history.map(p => p.ram), 1);
 
     return (
         <>
@@ -148,7 +151,9 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <h2 className="text-xl font-black text-white tracking-tighter italic">{node.name}</h2>
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${isOnline ? 'bg-[#00ff88]/10 text-[#00ff88]' : 'bg-red-500/10 text-red-500'}`}>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                                isOnline ? 'bg-[#00ff88]/10 text-[#00ff88]' : 'bg-red-500/10 text-red-500'
+                            }`}>
                                 {node.status}
                             </span>
                         </div>
@@ -197,12 +202,12 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
                         ) : (
                             <div className="h-24 flex items-end gap-[2px] bg-[#080808] border border-white/5 rounded-lg px-2 pt-2 pb-1 overflow-hidden">
                                 {history.map((pt, i) => {
-                                    // FIX: normalizar respecto al máximo del período
-                                    // Así cpu=39 usa ~65% del alto disponible y es visible
                                     const heightPct = Math.max((pt.cpu / maxCpu) * 100, 4);
                                     const isLast    = i === history.length - 1;
                                     return (
-                                        <div key={i} title={`${pt.time}: ${pt.cpu}%`}
+                                        <div
+                                            key={i}
+                                            title={`${pt.time}: ${pt.cpu}%`}
                                             className={`flex-1 rounded-t-[2px] transition-all ${
                                                 isLast
                                                     ? 'bg-[#3b82f6]'
@@ -238,7 +243,9 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
                                     const heightPct = Math.max((pt.ram / maxRam) * 100, 4);
                                     const isLast    = i === history.length - 1;
                                     return (
-                                        <div key={i} title={`${pt.time}: ${pt.ram}%`}
+                                        <div
+                                            key={i}
+                                            title={`${pt.time}: ${pt.ram}%`}
                                             className={`flex-1 rounded-t-[2px] transition-all ${
                                                 isLast
                                                     ? 'bg-purple-500'
@@ -287,7 +294,17 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
     );
 };
 
-export const AlertModal = ({ alert, onClose, onAck }: { alert: Alert | null, onClose: () => void, onAck: (id: number) => void }) => {
+// ─── ALERT MODAL ─────────────────────────────────────────────────────────────
+
+export const AlertModal = ({
+    alert,
+    onClose,
+    onAck,
+}: {
+    alert:   Alert | null;
+    onClose: () => void;
+    onAck:   (id: number) => void;
+}) => {
     if (!alert) return null;
 
     return (
@@ -299,7 +316,9 @@ export const AlertModal = ({ alert, onClose, onAck }: { alert: Alert | null, onC
                 </button>
 
                 <div className="flex items-center gap-3 mb-6">
-                    <div className={`p-3 rounded-xl ${alert.severity === 'Critical' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                    <div className={`p-3 rounded-xl ${
+                        alert.severity === 'Critical' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
+                    }`}>
                         <AlertTriangle size={24} />
                     </div>
                     <div>
@@ -311,30 +330,29 @@ export const AlertModal = ({ alert, onClose, onAck }: { alert: Alert | null, onC
                 <div className="bg-white/5 border border-white/5 rounded-xl p-4 mb-6">
                     <p className="text-sm font-bold text-[#ccc] mb-2">{alert.type}</p>
                     <p className="text-xs text-[#888]">{alert.message}</p>
-                    {alert.nodeId && <p className="text-[10px] text-[#555] font-mono mt-4 uppercase">Source: {alert.nodeId}</p>}
+                    {alert.nodeId && (
+                        <p className="text-[10px] text-[#555] font-mono mt-4 uppercase">Source: {alert.nodeId}</p>
+                    )}
                 </div>
 
                 <div className="flex gap-3">
                     <button onClick={onClose} className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl border border-white/5 text-xs uppercase transition-colors">
                         Close
                     </button>
-                    <button onClick={() => { onAck(alert.id); onClose(); }} className="flex-1 py-3 bg-[#00ff88] hover:bg-[#00cc6a] text-black font-black rounded-xl text-xs uppercase transition-colors">
+                    <button
+                        onClick={() => { onAck(alert.id); onClose(); }}
+                        className="flex-1 py-3 bg-[#00ff88] hover:bg-[#00cc6a] text-black font-black rounded-xl text-xs uppercase transition-colors"
+                    >
                         Acknowledge
                     </button>
                 </div>
             </div>
         </div>
     );
-}
+};
 
-// --- SESSION HISTORY MODAL ---
-// ── REEMPLAZA el componente SessionHistoryModal en OrchestratorDrawers.tsx ──
-//
-// BUG: OrchestratorTerminal pasa { isOpen, events, profileId, onClose }
-//      pero el componente esperaba  { sessionId, history, onClose, onAction }
-//      → los props nunca llegaban → modal nunca abría (crash silencioso).
-//
-// FIX: actualizar la firma para que coincida con lo que pasa el terminal.
+// ─── SESSION HISTORY MODAL ───────────────────────────────────────────────────
+// Bug corregido: usaba `event` (singular) en lugar de `ev` dentro del .map()
 
 export const SessionHistoryModal = ({
     isOpen,
@@ -342,10 +360,10 @@ export const SessionHistoryModal = ({
     profileId,
     onClose,
 }: {
-    isOpen:     boolean;
-    events:     import('../types/orchestratorTypes').SystemEvent[];
-    profileId:  string | null;
-    onClose:    () => void;
+    isOpen:    boolean;
+    events:    SystemEvent[];
+    profileId: string | null;
+    onClose:   () => void;
 }) => {
     if (!isOpen || !profileId) return null;
 
@@ -380,7 +398,9 @@ export const SessionHistoryModal = ({
                                         ev.type === 'SUCCESS' ? 'bg-[#00ff88]' :
                                         ev.type === 'ERROR'   ? 'bg-red-500'   : 'bg-blue-500'
                                     }`} />
-                                    {i < events.length - 1 && <div className="w-px flex-1 bg-white/10 my-1" />}
+                                    {i < events.length - 1 && (
+                                        <div className="w-px flex-1 bg-white/10 my-1" />
+                                    )}
                                 </div>
                                 <div className="flex-1 pb-4">
                                     <div className="flex justify-between items-start">
@@ -391,16 +411,15 @@ export const SessionHistoryModal = ({
                                         {ev.type} • {ev.source}
                                     </p>
 
-                                    // Después de donde muestra ev.message y ev.source, agrega:
-                                    {event?.meta?.log && event.meta.log.length > 0 && (
+                                    {/* ✅ Bug corregido: ev en lugar de event */}
+                                    {ev?.meta?.log && (ev.meta.log as string[]).length > 0 && (
                                         <div className="mt-3 p-3 bg-black/40 rounded-xl border border-white/5">
                                             <p className="text-[9px] font-black text-[#444] uppercase mb-2">Detalle por proxy</p>
                                             <div className="space-y-0.5 font-mono text-[10px]">
-                                                {event.meta.log.map((line: string, i: number) => (
-                                                    <div key={i} className={
+                                                {(ev.meta.log as string[]).map((line: string, li: number) => (
+                                                    <div key={li} className={
                                                         line.startsWith('✓') ? 'text-green-500' :
-                                                        line.startsWith('↺') ? 'text-blue-400' :
-                                                        'text-red-400'
+                                                        line.startsWith('↺') ? 'text-blue-400'  : 'text-red-400'
                                                     }>
                                                         {line}
                                                     </div>
@@ -409,10 +428,10 @@ export const SessionHistoryModal = ({
                                         </div>
                                     )}
 
-                                    {/* Si viene del activity feed (meta.message del alert) */}
-                                    {event?.meta?.message && (
-                                        <p className="mt-2 text-xs text-[#888] font-mono">{event.meta.message}</p>
+                                    {ev?.meta?.message && (
+                                        <p className="mt-2 text-xs text-[#888] font-mono">{ev.meta.message as string}</p>
                                     )}
+
                                     {ev.type === 'ERROR' && (
                                         <p className="mt-1 text-[9px] font-black text-red-500 uppercase flex items-center gap-1">
                                             <AlertTriangle size={10} /> Error en sesión
@@ -436,24 +455,28 @@ export const SessionHistoryModal = ({
         </div>
     );
 };
-// --- JOB DRAWER ---
-export const JobDrawer = ({ job, onClose }: { job: import('../types/orchestratorTypes').Job | null, onClose: () => void }) => {
+
+// ─── JOB DRAWER ──────────────────────────────────────────────────────────────
+
+export const JobDrawer = ({ job, onClose }: { job: Job | null; onClose: () => void }) => {
     if (!job) return null;
 
-    const isRunning = job.status === 'RUNNING';
-    const isFailed = job.status === 'FAILED';
-    const isCompleted = job.status === 'COMPLETED';
+    const isRunning   = job.status === 'RUNNING';
+    const isFailed    = job.status === 'FAILED';
 
     return (
         <>
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" onClick={onClose} />
             <div className="fixed inset-y-0 right-0 w-full md:w-[500px] bg-[#0c0c0c] border-l border-white/10 z-[70] shadow-2xl flex flex-col animate-slide-in-right">
-                {/* HEAD */}
                 <div className="p-6 border-b border-white/5 flex justify-between items-start">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <h2 className="text-xl font-black text-white tracking-tighter italic">{job.name}</h2>
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${isRunning ? 'bg-blue-500/10 text-blue-500' : isFailed ? 'bg-red-500/10 text-red-500' : 'bg-[#00ff88]/10 text-[#00ff88]'}`}>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                                isRunning ? 'bg-blue-500/10 text-blue-500' :
+                                isFailed  ? 'bg-red-500/10 text-red-500'  :
+                                            'bg-[#00ff88]/10 text-[#00ff88]'
+                            }`}>
                                 {job.status}
                             </span>
                         </div>
@@ -464,27 +487,28 @@ export const JobDrawer = ({ job, onClose }: { job: import('../types/orchestrator
                     </button>
                 </div>
 
-                {/* BODY */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
-
-                    {/* BARRIER & PROGRESS */}
                     <div className="bg-[#0a0a0a] border border-white/5 p-4 rounded-xl">
                         <div className="flex justify-between items-end mb-2">
                             <span className="text-[10px] font-bold text-[#666] uppercase">Progress</span>
                             <span className="text-lg font-mono text-white">{job.progress}%</span>
                         </div>
                         <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mb-4">
-                            <div className={`h-full rounded-full transition-all ${isFailed ? 'bg-red-500' : 'bg-[#00ff88]'}`} style={{ width: `${job.progress}%` }} />
+                            <div
+                                className={`h-full rounded-full transition-all ${isFailed ? 'bg-red-500' : 'bg-[#00ff88]'}`}
+                                style={{ width: `${job.progress}%` }}
+                            />
                         </div>
-
                         <div className="flex justify-between text-[10px] font-mono text-[#555] border-t border-white/5 pt-2">
                             <span>Tasks: {job.completedTasks}/{job.totalTasks}</span>
                             <span>Start: {job.startTime}</span>
                         </div>
-
-                        {/* BARRIER WAIT STATUS */}
                         {job.barrierStatus && (
-                            <div className={`mt-4 p-3 rounded-lg border flex items-center gap-3 ${job.barrierStatus === 'SYNCED' ? 'bg-[#00ff88]/5 border-[#00ff88]/20 text-[#00ff88]' : job.barrierStatus === 'TIMEOUT' ? 'bg-red-500/5 border-red-500/20 text-red-500' : 'bg-blue-500/5 border-blue-500/20 text-blue-500'}`}>
+                            <div className={`mt-4 p-3 rounded-lg border flex items-center gap-3 ${
+                                job.barrierStatus === 'SYNCED'  ? 'bg-[#00ff88]/5 border-[#00ff88]/20 text-[#00ff88]' :
+                                job.barrierStatus === 'TIMEOUT' ? 'bg-red-500/5 border-red-500/20 text-red-500'       :
+                                                                   'bg-blue-500/5 border-blue-500/20 text-blue-500'
+                            }`}>
                                 <Activity size={16} />
                                 <div>
                                     <p className="text-[10px] font-black uppercase">Barrier Status: {job.barrierStatus}</p>
@@ -494,7 +518,6 @@ export const JobDrawer = ({ job, onClose }: { job: import('../types/orchestrator
                         )}
                     </div>
 
-                    {/* LOGS */}
                     <div>
                         <h3 className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-4 flex items-center gap-2">
                             <Terminal size={12} /> Execution Logs
@@ -515,7 +538,6 @@ export const JobDrawer = ({ job, onClose }: { job: import('../types/orchestrator
                     </div>
                 </div>
 
-                {/* ACTIONS */}
                 <div className="p-4 border-t border-white/5 bg-[#0a0a0a]">
                     <button className="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl border border-white/5 text-xs uppercase transition-colors">
                         Download Report
@@ -526,20 +548,27 @@ export const JobDrawer = ({ job, onClose }: { job: import('../types/orchestrator
     );
 };
 
-// --- DASHBOARD SPECIFIC MODALS ---
+// ─── DASH KPI MODAL ──────────────────────────────────────────────────────────
 
-// 1. DASHBOARD KPI MODAL (Generic for all 4 KPI cards)
-export const DashKPIModal = ({ type, data, onClose }: { type: string | null, data: any, onClose: () => void }) => {
+export const DashKPIModal = ({
+    type,
+    data,
+    onClose,
+}: {
+    type:    string | null;
+    data:    any;
+    onClose: () => void;
+}) => {
     if (!type) return null;
 
     const getTitle = () => {
         switch (type) {
-            case 'NODES': return 'Computadoras Online';
-            case 'PROFILES': return 'Perfiles Activos';
-            case 'BROWSERS': return 'Navegadores Abiertos';
-            case 'ALERTS': return 'Alertas Activas';
+            case 'NODES':           return 'Computadoras Online';
+            case 'PROFILES':        return 'Perfiles Activos';
+            case 'BROWSERS':        return 'Navegadores Abiertos';
+            case 'ALERTS':          return 'Alertas Activas';
             case 'NETWORK_MONITOR': return 'Monitor de Red (Proxy/IP)';
-            default: return 'Detalle';
+            default:                return 'Detalle';
         }
     };
 
@@ -558,7 +587,6 @@ export const DashKPIModal = ({ type, data, onClose }: { type: string | null, dat
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
-                    {/* INFO: This is a simplified list for the modal. In real app, reuse row components. */}
                     {data && data.length > 0 ? (
                         data.map((item: any, i: number) => (
                             <div key={i} className="p-3 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center">
@@ -567,9 +595,9 @@ export const DashKPIModal = ({ type, data, onClose }: { type: string | null, dat
                                     <p className="text-[10px] text-[#666] uppercase">{item.status || item.severity || item.id}</p>
                                 </div>
                                 <div className="text-right">
-                                    {type === 'NODES' && <span className="text-[#00ff88] text-xs font-mono">{item.cpu}% CPU</span>}
+                                    {type === 'NODES'    && <span className="text-[#00ff88] text-xs font-mono">{item.cpu}% CPU</span>}
                                     {type === 'PROFILES' && <span className="text-blue-500 text-xs font-mono">{item.memory}MB</span>}
-                                    {type === 'ALERTS' && <span className="text-red-500 text-xs font-bold">{item.severity}</span>}
+                                    {type === 'ALERTS'   && <span className="text-red-500 text-xs font-bold">{item.severity}</span>}
                                     {type === 'BROWSERS' && <span className="text-amber-500 text-xs font-mono">{item.openBrowsers} Tabs</span>}
                                 </div>
                             </div>
@@ -589,7 +617,8 @@ export const DashKPIModal = ({ type, data, onClose }: { type: string | null, dat
     );
 };
 
-// 2. DASHBOARD FILTERS DRAWER
+// ─── DASH FILTERS DRAWER ─────────────────────────────────────────────────────
+
 export const DashFiltersDrawer = ({ isOpen, onClose, filters, setFilters, onReset }: any) => {
     if (!isOpen) return null;
 
@@ -610,7 +639,11 @@ export const DashFiltersDrawer = ({ isOpen, onClose, filters, setFilters, onRese
                                 <button
                                     key={t}
                                     onClick={() => setFilters({ ...filters, timeRange: t })}
-                                    className={`py-2 text-xs font-bold rounded border ${filters.timeRange === t ? 'bg-[#00ff88] text-black border-[#00ff88]' : 'bg-white/5 text-[#ccc] border-white/5'}`}
+                                    className={`py-2 text-xs font-bold rounded border ${
+                                        filters.timeRange === t
+                                            ? 'bg-[#00ff88] text-black border-[#00ff88]'
+                                            : 'bg-white/5 text-[#ccc] border-white/5'
+                                    }`}
                                 >
                                     {t}
                                 </button>
@@ -622,7 +655,7 @@ export const DashFiltersDrawer = ({ isOpen, onClose, filters, setFilters, onRese
                         <label className="text-[10px] font-bold text-[#666] uppercase">Severidad Alertas</label>
                         <select
                             value={filters.severity}
-                            onChange={(e) => setFilters({ ...filters, severity: e.target.value })}
+                            onChange={e => setFilters({ ...filters, severity: e.target.value })}
                             className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-[#00ff88]"
                         >
                             <option value="ALL">Todas</option>
@@ -635,7 +668,7 @@ export const DashFiltersDrawer = ({ isOpen, onClose, filters, setFilters, onRese
                         <label className="text-[10px] font-bold text-[#666] uppercase">Propietario</label>
                         <select
                             value={filters.owner || 'ALL'}
-                            onChange={(e) => setFilters({ ...filters, owner: e.target.value })}
+                            onChange={e => setFilters({ ...filters, owner: e.target.value })}
                             className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-[#00ff88]"
                         >
                             <option value="ALL">Todos</option>
@@ -656,7 +689,7 @@ export const DashFiltersDrawer = ({ isOpen, onClose, filters, setFilters, onRese
                         <label className="text-[10px] font-bold text-[#666] uppercase">Estado Cookies</label>
                         <select
                             value={filters.cookieStatus || 'ALL'}
-                            onChange={(e) => setFilters({ ...filters, cookieStatus: e.target.value })}
+                            onChange={e => setFilters({ ...filters, cookieStatus: e.target.value })}
                             className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-[#00ff88]"
                         >
                             <option value="ALL">Cualquiera</option>
@@ -680,41 +713,44 @@ export const DashFiltersDrawer = ({ isOpen, onClose, filters, setFilters, onRese
     );
 };
 
-// 3. HEALTH DETAIL MODAL
-export const HealthDetailModal = ({ isOpen, score, onClose }: { isOpen: boolean, score: number, onClose: () => void }) => {
+// ─── HEALTH DETAIL MODAL ─────────────────────────────────────────────────────
+
+export const HealthDetailModal = ({
+    isOpen,
+    score,
+    onClose,
+}: {
+    isOpen:  boolean;
+    score:   number;
+    onClose: () => void;
+}) => {
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-md relative z-[90] p-6 shadow-2xl animate-fade-in-up">
-                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white"><X size={20} /></button>
+                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white">
+                    <X size={20} />
+                </button>
 
                 <h3 className="text-lg font-black text-white italic mb-1">Detalle de Salud</h3>
                 <p className="text-xs text-[#666] mb-6">Cálculo en tiempo real basado en 3 factores.</p>
 
                 <div className="space-y-4 mb-6">
-                    <div className="p-4 bg-white/5 rounded-xl flex justify-between items-center border border-white/5">
-                        <span className="text-xs font-bold text-[#ccc]">Tiempo de Respuesta</span>
-                        <div className="text-right">
-                            <span className="block text-[#00ff88] font-mono font-bold">45ms</span>
-                            <span className="text-[9px] text-[#555]">Impacto: Alto</span>
+                    {[
+                        { label: 'Tiempo de Respuesta',    value: '45ms',   color: 'text-[#00ff88]', impact: 'Alto' },
+                        { label: 'Tasa de Errores',        value: '0.02%',  color: 'text-green-500', impact: 'Crítico' },
+                        { label: 'Disponibilidad (Uptime)', value: '99.9%', color: 'text-[#00ff88]', impact: 'Medio' },
+                    ].map(item => (
+                        <div key={item.label} className="p-4 bg-white/5 rounded-xl flex justify-between items-center border border-white/5">
+                            <span className="text-xs font-bold text-[#ccc]">{item.label}</span>
+                            <div className="text-right">
+                                <span className={`block font-mono font-bold ${item.color}`}>{item.value}</span>
+                                <span className="text-[9px] text-[#555]">Impacto: {item.impact}</span>
+                            </div>
                         </div>
-                    </div>
-                    <div className="p-4 bg-white/5 rounded-xl flex justify-between items-center border border-white/5">
-                        <span className="text-xs font-bold text-[#ccc]">Tasa de Errores</span>
-                        <div className="text-right">
-                            <span className="block text-green-500 font-mono font-bold">0.02%</span>
-                            <span className="text-[9px] text-[#555]">Impacto: Crítico</span>
-                        </div>
-                    </div>
-                    <div className="p-4 bg-white/5 rounded-xl flex justify-between items-center border border-white/5">
-                        <span className="text-xs font-bold text-[#ccc]">Disponibilidad (Uptime)</span>
-                        <div className="text-right">
-                            <span className="block text-[#00ff88] font-mono font-bold">99.9%</span>
-                            <span className="text-[9px] text-[#555]">Impacto: Medio</span>
-                        </div>
-                    </div>
+                    ))}
                 </div>
 
                 <div className="bg-[#00ff88]/5 border border-[#00ff88]/20 p-4 rounded-xl">
@@ -729,8 +765,15 @@ export const HealthDetailModal = ({ isOpen, score, onClose }: { isOpen: boolean,
     );
 };
 
-// 4. SERVICE DETAIL MODAL
-export const ServiceDetailModal = ({ service, onClose }: { service: import('../types/orchestratorTypes').ServiceStatus | null, onClose: () => void }) => {
+// ─── SERVICE DETAIL MODAL ────────────────────────────────────────────────────
+
+export const ServiceDetailModal = ({
+    service,
+    onClose,
+}: {
+    service: ServiceStatus | null;
+    onClose: () => void;
+}) => {
     if (!service) return null;
 
     const isOnline = service.status === 'ONLINE';
@@ -739,7 +782,9 @@ export const ServiceDetailModal = ({ service, onClose }: { service: import('../t
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[90] p-6 shadow-2xl animate-fade-in-up">
-                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white"><X size={20} /></button>
+                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white">
+                    <X size={20} />
+                </button>
 
                 <div className="flex items-center gap-4 mb-6">
                     <div className={`p-4 rounded-xl ${isOnline ? 'bg-[#00ff88]/10 text-[#00ff88]' : 'bg-red-500/10 text-red-500'}`}>
@@ -754,7 +799,9 @@ export const ServiceDetailModal = ({ service, onClose }: { service: import('../t
                 <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="bg-[#0a0a0a] border border-white/5 p-4 rounded-xl">
                         <span className="text-[10px] text-[#666] uppercase block mb-1">Latencia</span>
-                        <span className={`text-xl font-mono font-bold ${service.latency < 100 ? 'text-[#00ff88]' : 'text-amber-500'}`}>{service.latency}ms</span>
+                        <span className={`text-xl font-mono font-bold ${service.latency < 100 ? 'text-[#00ff88]' : 'text-amber-500'}`}>
+                            {service.latency}ms
+                        </span>
                     </div>
                     <div className="bg-[#0a0a0a] border border-white/5 p-4 rounded-xl">
                         <span className="text-[10px] text-[#666] uppercase block mb-1">Uptime</span>
@@ -789,19 +836,30 @@ export const ServiceDetailModal = ({ service, onClose }: { service: import('../t
     );
 };
 
-// 5. SECURITY CHECK MODAL
-export const SecurityCheckModal = ({ profile, onClose, onVerify }: { profile: import('../types/orchestratorTypes').ProfileItem | null, onClose: () => void, onVerify: (id: string) => void }) => {
+// ─── SECURITY CHECK MODAL ────────────────────────────────────────────────────
+
+export const SecurityCheckModal = ({
+    profile,
+    onClose,
+    onVerify,
+}: {
+    profile:  ProfileItem | null;
+    onClose:  () => void;
+    onVerify: (id: string) => void;
+}) => {
     if (!profile) return null;
 
-    const browserScore = profile.browserScore || 0;
+    const browserScore     = profile.browserScore     || 0;
     const fingerprintScore = profile.fingerprintScore || 0;
-    const isCookiesOk = profile.cookieStatus === 'OK';
+    const isCookiesOk      = profile.cookieStatus === 'OK';
 
     return (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[90] p-6 shadow-2xl animate-fade-in-up">
-                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white"><X size={20} /></button>
+                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white">
+                    <X size={20} />
+                </button>
 
                 <div className="flex items-center gap-4 mb-6">
                     <div className="p-4 rounded-xl bg-blue-500/10 text-blue-500">
@@ -809,17 +867,29 @@ export const SecurityCheckModal = ({ profile, onClose, onVerify }: { profile: im
                     </div>
                     <div>
                         <h3 className="text-xl font-black text-white italic tracking-tighter">Seguridad & Cookies</h3>
-                        <p className="text-xs text-[#666]">Verificación de integridad para: <span className="text-white font-bold">{profile.name}</span></p>
+                        <p className="text-xs text-[#666]">
+                            Verificación de integridad para: <span className="text-white font-bold">{profile.name}</span>
+                        </p>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className={`p-4 rounded-xl border ${browserScore >= 80 ? 'bg-[#00ff88]/5 border-[#00ff88]/20' : browserScore >= 60 ? 'bg-amber-500/5 border-amber-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                    <div className={`p-4 rounded-xl border ${
+                        browserScore >= 80 ? 'bg-[#00ff88]/5 border-[#00ff88]/20' :
+                        browserScore >= 60 ? 'bg-amber-500/5 border-amber-500/20'  :
+                                             'bg-red-500/5 border-red-500/20'
+                    }`}>
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-[10px] font-black uppercase text-[#888]">Browser Score</span>
-                        <Fingerprint size={16} className={browserScore >= 80 ? 'text-[#00ff88]' : browserScore >= 60 ? 'text-amber-500' : 'text-red-500'} />
+                            <Fingerprint size={16} className={
+                                browserScore >= 80 ? 'text-[#00ff88]' :
+                                browserScore >= 60 ? 'text-amber-500' : 'text-red-500'
+                            } />
                         </div>
-                        <p className={`text-3xl font-black ${browserScore >= 80 ? 'text-[#00ff88]' : browserScore >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
+                        <p className={`text-3xl font-black ${
+                            browserScore >= 80 ? 'text-[#00ff88]' :
+                            browserScore >= 60 ? 'text-amber-500' : 'text-red-500'
+                        }`}>
                             {browserScore}%
                         </p>
                         <p className="text-[9px] text-[#666] mt-1">Integridad de huella digital</p>
@@ -830,32 +900,40 @@ export const SecurityCheckModal = ({ profile, onClose, onVerify }: { profile: im
                             <span className="text-[10px] font-black uppercase text-[#888]">Cookie Status</span>
                             <Cookie size={16} className={isCookiesOk ? 'text-[#00ff88]' : 'text-red-500'} />
                         </div>
-                        <p className={`text-xl font-black ${isCookiesOk ? 'text-[#00ff88]' : 'text-red-500'} mt-1`}>{isCookiesOk ? 'ACTIVE' : 'EXPIRED'}</p>
+                        <p className={`text-xl font-black mt-1 ${isCookiesOk ? 'text-[#00ff88]' : 'text-red-500'}`}>
+                            {isCookiesOk ? 'ACTIVE' : 'EXPIRED'}
+                        </p>
                         <p className="text-[9px] text-[#666] mt-2">Sesión persistente</p>
                     </div>
                 </div>
 
                 <div className="bg-[#0a0a0a] border border-white/5 rounded-xl p-4 mb-6">
                     <div className="flex items-center gap-3 mb-3">
-                        {isCookiesOk && browserScore > 60 ? <CheckCircle2 size={16} className="text-[#00ff88]" /> : <AlertTriangle size={16} className="text-amber-500" />}
-                        <span>
-                            {isCookiesOk && browserScore >= 60 ? 'Perfil verificado y seguro. Navega para subir el score' : 'Se requiere atención manual.'}
+                        {isCookiesOk && browserScore > 60
+                            ? <CheckCircle2 size={16} className="text-[#00ff88]" />
+                            : <AlertTriangle size={16} className="text-amber-500" />
+                        }
+                        <span className="text-xs text-[#ccc]">
+                            {isCookiesOk && browserScore >= 60
+                                ? 'Perfil verificado y seguro. Navega para subir el score'
+                                : !isCookiesOk
+                                    ? 'Acción Requerida: Actualizar Cookies'
+                                    : `Score bajo (${browserScore}%) — Usar el perfil para subir score`
+                            }
                         </span>
-                        {(!isCookiesOk || browserScore < 60) && (
-                        <div>
-                            {!isCookiesOk ? 'Acción Requerida: Actualizar Cookies' : `Score bajo (${browserScore}%) — Usar el perfil para subir score`}
-                        </div>
-)}
                     </div>
                     {(!isCookiesOk || browserScore < 60) && (
                         <div className="bg-red-500/10 text-red-500 text-[10px] p-2 rounded border border-red-500/20 font-bold uppercase">
-                            Acción Requerida: Actualizar Cookies
+                            Acción Requerida: {!isCookiesOk ? 'Actualizar Cookies' : 'Usar perfil para subir score'}
                         </div>
                     )}
                 </div>
 
                 <div className="flex gap-2">
-                    <button onClick={() => onVerify(profile.id)} className="flex-1 py-3 bg-[#00ff88] text-black font-black uppercase text-xs rounded-xl hover:bg-[#00cc6a] transition-colors flex items-center justify-center gap-2">
+                    <button
+                        onClick={() => onVerify(profile.id)}
+                        className="flex-1 py-3 bg-[#00ff88] text-black font-black uppercase text-xs rounded-xl hover:bg-[#00cc6a] transition-colors flex items-center justify-center gap-2"
+                    >
                         <CheckCircle2 size={16} /> Verificar & Aprobar
                     </button>
                     <button className="px-4 py-3 bg-white/5 text-white font-bold uppercase text-xs rounded-xl hover:bg-white/10 transition-colors" title="Ver logs">
@@ -867,39 +945,45 @@ export const SecurityCheckModal = ({ profile, onClose, onVerify }: { profile: im
     );
 };
 
-// 6. SESSION START MODAL
-export const SessionStartModal = ({ isOpen, onClose, profiles, onStart }: { isOpen: boolean, onClose: () => void, profiles: import('../types/orchestratorTypes').ProfileItem[], onStart: (ids: string[]) => void }) => {
+// ─── SESSION START MODAL ─────────────────────────────────────────────────────
+
+export const SessionStartModal = ({
+    isOpen,
+    onClose,
+    profiles,
+    onStart,
+}: {
+    isOpen:    boolean;
+    onClose:   () => void;
+    profiles:  ProfileItem[];
+    onStart:   (ids: string[]) => void;
+}) => {
     const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
-    const [filterMode, setFilterMode] = React.useState<'ALL' | 'OWNER' | 'BOOKIE'>('ALL');
+    const [filterMode, setFilterMode]   = React.useState<'ALL' | 'OWNER' | 'BOOKIE'>('ALL');
     const [activeFilter, setActiveFilter] = React.useState<string | null>(null);
 
-    // Get unique owners and bookies
-    const owners = Array.from(new Set(profiles.map(p => p.owner).filter(Boolean)));
-    const bookies = Array.from(new Set(profiles.map(p => p.bookie).filter(Boolean)));
+    const owners  = Array.from(new Set(profiles.map(p => p.owner).filter(Boolean))) as string[];
+    const bookies = Array.from(new Set(profiles.map(p => p.bookie).filter(Boolean))) as string[];
 
     if (!isOpen) return null;
 
     const filteredProfiles = profiles.filter(p => {
-        if (filterMode === 'ALL') return true;
-        if (filterMode === 'OWNER' && activeFilter) return p.owner === activeFilter;
+        if (filterMode === 'ALL')   return true;
+        if (filterMode === 'OWNER'  && activeFilter) return p.owner  === activeFilter;
         if (filterMode === 'BOOKIE' && activeFilter) return p.bookie === activeFilter;
         return true;
     });
 
     const toggleProfile = (id: string) => {
-        if (selectedIds.includes(id)) {
-            setSelectedIds(selectedIds.filter(pid => pid !== id));
-        } else {
-            setSelectedIds([...selectedIds, id]);
-        }
+        setSelectedIds(prev =>
+            prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]
+        );
     };
 
     const toggleAll = () => {
-        if (selectedIds.length === filteredProfiles.length) {
-            setSelectedIds([]);
-        } else {
-            setSelectedIds(filteredProfiles.map(p => p.id));
-        }
+        setSelectedIds(
+            selectedIds.length === filteredProfiles.length ? [] : filteredProfiles.map(p => p.id)
+        );
     };
 
     return (
@@ -907,55 +991,54 @@ export const SessionStartModal = ({ isOpen, onClose, profiles, onStart }: { isOp
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-4xl relative z-[90] p-0 shadow-2xl animate-fade-in-up max-h-[85vh] flex overflow-hidden">
 
-                {/* SIDEBAR FILTERS */}
+                {/* SIDEBAR */}
                 <div className="w-1/3 bg-[#050505] border-r border-white/5 p-6 flex flex-col gap-6">
                     <div>
                         <h3 className="text-lg font-black text-white italic tracking-tighter mb-1">Filtrar Por</h3>
                         <p className="text-[10px] text-[#666]">Selecciona el criterio de búsqueda</p>
                     </div>
-
                     <div className="space-y-4">
-                        {/* MODE SELECTOR */}
                         <div className="flex bg-black p-1 rounded-xl border border-white/10">
-                            <button
-                                onClick={() => { setFilterMode('OWNER'); setActiveFilter(null); }}
-                                className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-colors ${filterMode === 'OWNER' ? 'bg-[#00ff88] text-black' : 'text-[#666] hover:text-white'}`}
-                            >
-                                Dueños
-                            </button>
-                            <button
-                                onClick={() => { setFilterMode('BOOKIE'); setActiveFilter(null); }}
-                                className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-colors ${filterMode === 'BOOKIE' ? 'bg-[#00ff88] text-black' : 'text-[#666] hover:text-white'}`}
-                            >
-                                Bookies
-                            </button>
+                            {(['OWNER', 'BOOKIE'] as const).map(mode => (
+                                <button
+                                    key={mode}
+                                    onClick={() => { setFilterMode(mode); setActiveFilter(null); }}
+                                    className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-colors ${
+                                        filterMode === mode ? 'bg-[#00ff88] text-black' : 'text-[#666] hover:text-white'
+                                    }`}
+                                >
+                                    {mode === 'OWNER' ? 'Dueños' : 'Bookies'}
+                                </button>
+                            ))}
                         </div>
-
-                        {/* LISTS */}
-                        <div className="flex-1 overflow-y-auto custom-scrollbar h-[300px] pr-2 space-y-1">
+                        <div className="overflow-y-auto custom-scrollbar h-[300px] pr-2 space-y-1">
                             {filterMode === 'ALL' && (
                                 <div className="p-4 text-center text-[#444] text-xs italic">
-                                    Selecciona un modo arriba para ver opciones.
-                                    <br />
-                                    <button onClick={() => setActiveFilter(null)} className="mt-4 text-[#00ff88] underline">Ver Todos</button>
+                                    Selecciona un modo arriba.
                                 </div>
                             )}
-
                             {filterMode === 'OWNER' && owners.map(owner => (
                                 <button
                                     key={owner}
                                     onClick={() => setActiveFilter(owner)}
-                                    className={`w-full text-left p-3 rounded-lg border text-[10px] font-bold uppercase transition-all ${activeFilter === owner ? 'bg-[#00ff88]/10 border-[#00ff88] text-[#00ff88]' : 'bg-white/5 border-transparent text-[#aaa] hover:bg-white/10'}`}
+                                    className={`w-full text-left p-3 rounded-lg border text-[10px] font-bold uppercase transition-all ${
+                                        activeFilter === owner
+                                            ? 'bg-[#00ff88]/10 border-[#00ff88] text-[#00ff88]'
+                                            : 'bg-white/5 border-transparent text-[#aaa] hover:bg-white/10'
+                                    }`}
                                 >
                                     {owner}
                                 </button>
                             ))}
-
                             {filterMode === 'BOOKIE' && bookies.map(bookie => (
                                 <button
                                     key={bookie}
                                     onClick={() => setActiveFilter(bookie)}
-                                    className={`w-full text-left p-3 rounded-lg border text-[10px] font-bold uppercase transition-all ${activeFilter === bookie ? 'bg-[#00ff88]/10 border-[#00ff88] text-[#00ff88]' : 'bg-white/5 border-transparent text-[#aaa] hover:bg-white/10'}`}
+                                    className={`w-full text-left p-3 rounded-lg border text-[10px] font-bold uppercase transition-all ${
+                                        activeFilter === bookie
+                                            ? 'bg-[#00ff88]/10 border-[#00ff88] text-[#00ff88]'
+                                            : 'bg-white/5 border-transparent text-[#aaa] hover:bg-white/10'
+                                    }`}
                                 >
                                     {bookie}
                                 </button>
@@ -964,13 +1047,13 @@ export const SessionStartModal = ({ isOpen, onClose, profiles, onStart }: { isOp
                     </div>
                 </div>
 
-                {/* MAIN CONTENT */}
+                {/* MAIN */}
                 <div className="flex-1 p-6 flex flex-col bg-[#0c0c0c]">
                     <div className="flex justify-between items-center mb-4">
                         <div>
                             <h3 className="text-xl font-black text-white italic tracking-tighter">Perfiles Disponibles</h3>
                             <p className="text-xs text-[#666]">
-                                {filterMode === 'ALL' ? 'Mostrando todos los perfiles' : `Filtrado por: ${activeFilter || 'Ninguno'}`}
+                                {filterMode === 'ALL' ? 'Mostrando todos' : `Filtrado por: ${activeFilter || 'Ninguno'}`}
                             </p>
                         </div>
                         <button onClick={onClose} className="text-[#666] hover:text-white"><X size={20} /></button>
@@ -988,25 +1071,36 @@ export const SessionStartModal = ({ isOpen, onClose, profiles, onStart }: { isOp
                             <div className="p-8 text-center text-[#444] text-xs uppercase italic">
                                 No hay perfiles con este filtro
                             </div>
-                        ) : (
-                            filteredProfiles.map(p => (
-                                <div key={p.id} onClick={() => toggleProfile(p.id)} className={`grid grid-cols-12 gap-2 p-3 border-b border-white/5 items-center hover:bg-white/5 cursor-pointer transition-colors ${selectedIds.includes(p.id) ? 'bg-[#00ff88]/5' : ''}`}>
-                                    <div className="col-span-1 flex justify-center">
-                                        <div className={`size-4 rounded border flex items-center justify-center ${selectedIds.includes(p.id) ? 'bg-[#00ff88] border-[#00ff88]' : 'border-white/20'}`}>
-                                            {selectedIds.includes(p.id) && <CheckCircle2 size={12} className="text-black" />}
-                                        </div>
-                                    </div>
-                                    <div className="col-span-4 font-bold text-white text-xs truncate">{p.name}</div>
-                                    <div className="col-span-3 text-[10px] text-[#888] truncate">{p.owner || '-'}</div>
-                                    <div className="col-span-2 flex justify-center">
-                                        <span className={`text-[10px] font-bold ${p.health > 80 ? 'text-[#00ff88]' : 'text-red-500'}`}>{p.health}%</span>
-                                    </div>
-                                    <div className="col-span-2 flex justify-center gap-1">
-                                        {(p.browserScore || 0) > 60 ? <Shield size={12} className="text-[#00ff88]" /> : <AlertTriangle size={12} className="text-amber-500" />}
+                        ) : filteredProfiles.map(p => (
+                            <div
+                                key={p.id}
+                                onClick={() => toggleProfile(p.id)}
+                                className={`grid grid-cols-12 gap-2 p-3 border-b border-white/5 items-center hover:bg-white/5 cursor-pointer transition-colors ${
+                                    selectedIds.includes(p.id) ? 'bg-[#00ff88]/5' : ''
+                                }`}
+                            >
+                                <div className="col-span-1 flex justify-center">
+                                    <div className={`size-4 rounded border flex items-center justify-center ${
+                                        selectedIds.includes(p.id) ? 'bg-[#00ff88] border-[#00ff88]' : 'border-white/20'
+                                    }`}>
+                                        {selectedIds.includes(p.id) && <CheckCircle2 size={12} className="text-black" />}
                                     </div>
                                 </div>
-                            ))
-                        )}
+                                <div className="col-span-4 font-bold text-white text-xs truncate">{p.name}</div>
+                                <div className="col-span-3 text-[10px] text-[#888] truncate">{p.owner || '-'}</div>
+                                <div className="col-span-2 flex justify-center">
+                                    <span className={`text-[10px] font-bold ${p.health > 80 ? 'text-[#00ff88]' : 'text-red-500'}`}>
+                                        {p.health}%
+                                    </span>
+                                </div>
+                                <div className="col-span-2 flex justify-center gap-1">
+                                    {(p.browserScore || 0) > 60
+                                        ? <Shield size={12} className="text-[#00ff88]" />
+                                        : <AlertTriangle size={12} className="text-amber-500" />
+                                    }
+                                </div>
+                            </div>
+                        ))}
                     </div>
 
                     <div className="mt-4 flex justify-between items-center">
@@ -1033,96 +1127,69 @@ export const SessionStartModal = ({ isOpen, onClose, profiles, onStart }: { isOp
     );
 };
 
+// ─── CREATE PROFILE MODAL ────────────────────────────────────────────────────
 
-// 7. CREATE PROFILE MODAL — 4 pasos: Info → Proxy → Dispositivo → Resumen
-export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
-    isOpen: boolean;
-    onClose: () => void;
+export const CreateProfileModal = ({
+    isOpen,
+    onClose,
+    onCreate,
+}: {
+    isOpen:   boolean;
+    onClose:  () => void;
     onCreate: (data: any) => void;
 }) => {
-    const [step, setStep] = React.useState(1);
+    const [step, setStep]           = React.useState(1);
     const [submitting, setSubmitting] = React.useState(false);
-
-    const [form, setForm] = React.useState({
-        // ── Paso 1: Info General ──────────────────────────────────
-        name:       '',
-        owner:      '',
-        bookie:     'Bet365',
-        sport:      'Fútbol',
-
-        // ── Paso 2: Proxy / Red ───────────────────────────────────
-        proxyType:       'RESIDENTIAL',   // RESIDENTIAL | MOBILE_4G | DATACENTER
-        country:         'ES',
-        city:            '',
-        rotationMinutes: 30,              // rotar cada N minutos (0 = manual)
-        warmupUrls:      'https://www.google.com\nhttps://www.youtube.com',
-
-        // ── Paso 3: Dispositivo / Huella ──────────────────────────
-        deviceType:   'DESKTOP',          // DESKTOP | TABLET | MOBILE
-        os:           'Windows',          // Windows | macOS | Android | iOS
-        screenRes:    '1920x1080',
-        language:     'es-ES',
-        autoFingerprint: true,
-        openOnCreate: false,              // abrir navegador al crear
+    const [form, setForm]           = React.useState({
+        name: '', owner: '', bookie: 'Bet365', sport: 'Fútbol',
+        proxyType: 'RESIDENTIAL', country: 'ES', city: '', rotationMinutes: 30,
+        warmupUrls: 'https://www.google.com\nhttps://www.youtube.com',
+        deviceType: 'DESKTOP', os: 'Windows', screenRes: '1920x1080',
+        language: 'es-ES', autoFingerprint: true, openOnCreate: false,
     });
 
     const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
-    const STEPS = ['Info General', 'Proxy / Red', 'Dispositivo', 'Resumen'];
-    const BOOKIES = ['Bet365', '1xBet', 'Betfair', 'Pinnacle', 'William Hill', 'Bwin', 'Unibet', 'Codere', 'Betway'];
-    const SPORTS  = ['Fútbol', 'Tenis', 'Baloncesto', 'Béisbol', 'Hockey', 'Fórmula 1', 'eSports'];
+    const STEPS    = ['Info General', 'Proxy / Red', 'Dispositivo', 'Resumen'];
+    const BOOKIES  = ['Bet365', '1xBet', 'Betfair', 'Pinnacle', 'William Hill', 'Bwin', 'Unibet', 'Codere', 'Betway'];
+    const SPORTS   = ['Fútbol', 'Tenis', 'Baloncesto', 'Béisbol', 'Hockey', 'Fórmula 1', 'eSports'];
     const COUNTRIES = [
-        { code: 'ES', name: '🇪🇸 España' },
-        { code: 'IT', name: '🇮🇹 Italia' },
-        { code: 'GB', name: '🇬🇧 Reino Unido' },
-        { code: 'DE', name: '🇩🇪 Alemania' },
-        { code: 'FR', name: '🇫🇷 Francia' },
-        { code: 'BR', name: '🇧🇷 Brasil' },
-        { code: 'MX', name: '🇲🇽 México' },
-        { code: 'US', name: '🇺🇸 Estados Unidos' },
+        { code: 'ES', name: '🇪🇸 España' }, { code: 'IT', name: '🇮🇹 Italia' },
+        { code: 'GB', name: '🇬🇧 Reino Unido' }, { code: 'DE', name: '🇩🇪 Alemania' },
+        { code: 'FR', name: '🇫🇷 Francia' }, { code: 'BR', name: '🇧🇷 Brasil' },
+        { code: 'MX', name: '🇲🇽 México' }, { code: 'US', name: '🇺🇸 Estados Unidos' },
         { code: 'AR', name: '🇦🇷 Argentina' },
     ];
     const SCREENS_BY_DEVICE: Record<string, string[]> = {
         DESKTOP: ['1920x1080', '2560x1440', '1440x900', '1366x768'],
-        TABLET:  ['1280x800',  '1024x768',  '768x1024'],
-        MOBILE:  ['390x844',   '414x896',   '375x812', '360x780'],
+        TABLET:  ['1280x800', '1024x768', '768x1024'],
+        MOBILE:  ['390x844', '414x896', '375x812', '360x780'],
     };
 
     const fieldCls = 'w-full bg-[#080808] border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#00ff88] outline-none transition-colors';
     const labelCls = 'text-[10px] font-black text-[#555] uppercase tracking-widest';
 
-    const handleSubmit = async () => {
-        setSubmitting(true);
-        try {
-            await onCreate({
-                // Profile fields
-                name:    form.name,
-                owner:   form.owner,
-                bookie:  form.bookie,
-                sport:   form.sport,
-                // Proxy fields
-                proxy_type:       form.proxyType,
-                country:          form.country,
-                city:             form.city || null,
-                rotation_minutes: form.rotationMinutes,
-                warmup_urls:      form.warmupUrls.split('\n').map(u => u.trim()).filter(Boolean),
-                // Device/fingerprint fields
-                device_type:      form.deviceType,
-                os:               form.os,
-                screen_res:       form.screenRes,
-                language:         form.language,
-                auto_fingerprint: form.autoFingerprint,
-                open_on_create:   form.openOnCreate,
-            });
-        } finally {
-            setSubmitting(false);
-        }
-    };
-
     const canNext = () => {
         if (step === 1) return form.name.trim().length > 0 && form.owner.trim().length > 0;
         if (step === 2) return form.country.length > 0;
         return true;
+    };
+
+    const handleSubmit = async () => {
+        setSubmitting(true);
+        try {
+            await onCreate({
+                name: form.name, owner: form.owner, bookie: form.bookie, sport: form.sport,
+                proxy_type: form.proxyType, country: form.country, city: form.city || null,
+                rotation_minutes: form.rotationMinutes,
+                warmup_urls: form.warmupUrls.split('\n').map(u => u.trim()).filter(Boolean),
+                device_type: form.deviceType, os: form.os, screen_res: form.screenRes,
+                language: form.language, auto_fingerprint: form.autoFingerprint,
+                open_on_create: form.openOnCreate,
+            });
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -1131,14 +1198,18 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-2xl relative z-[90] shadow-2xl animate-fade-in-up flex flex-col max-h-[90vh]">
-                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white z-10"><X size={20} /></button>
+                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white z-10">
+                    <X size={20} />
+                </button>
 
                 {/* Header */}
                 <div className="p-8 pb-4">
                     <h3 className="text-2xl font-black text-white italic tracking-tighter mb-4">Nuevo Perfil</h3>
                     <div className="flex gap-2 mb-1">
                         {STEPS.map((_, i) => (
-                            <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${step > i ? 'bg-[#00ff88]' : step === i + 1 ? 'bg-[#00ff88]/60' : 'bg-white/10'}`} />
+                            <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                                step > i ? 'bg-[#00ff88]' : step === i + 1 ? 'bg-[#00ff88]/60' : 'bg-white/10'
+                            }`} />
                         ))}
                     </div>
                     <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mt-2">
@@ -1149,7 +1220,6 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto px-8 pb-2">
 
-                    {/* ─── PASO 1: INFO GENERAL ─── */}
                     {step === 1 && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                             <div className="grid grid-cols-2 gap-4">
@@ -1164,35 +1234,37 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
                                 <div className="space-y-2">
                                     <label className={labelCls}>Casa de Apuestas</label>
                                     <select className={fieldCls} value={form.bookie} onChange={e => set('bookie', e.target.value)}>
-                                        {BOOKIES.map(b => <option key={b} value={b}>{b}</option>)}
+                                        {BOOKIES.map(b => <option key={b}>{b}</option>)}
                                     </select>
                                 </div>
                                 <div className="space-y-2">
                                     <label className={labelCls}>Deporte</label>
                                     <select className={fieldCls} value={form.sport} onChange={e => set('sport', e.target.value)}>
-                                        {SPORTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                        {SPORTS.map(s => <option key={s}>{s}</option>)}
                                     </select>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* ─── PASO 2: PROXY / RED ─── */}
                     {step === 2 && (
                         <div className="space-y-5 animate-in fade-in slide-in-from-right-4">
-                            {/* Tipo de proxy */}
                             <div className="space-y-2">
                                 <label className={labelCls}>Tipo de Proxy</label>
                                 <div className="flex gap-2">
                                     {[
-                                        { val: 'RESIDENTIAL', label: 'Residencial', desc: 'Mayor confianza', color: '#00ff88' },
-                                        { val: 'MOBILE_4G',   label: 'Móvil 4G',   desc: 'Anti-detección', color: '#3b82f6' },
-                                        { val: 'DATACENTER',  label: 'Datacenter',  desc: 'Alta velocidad',  color: '#a855f7' },
+                                        { val: 'RESIDENTIAL', label: 'Residencial', desc: 'Mayor confianza' },
+                                        { val: 'MOBILE_4G',   label: 'Móvil 4G',   desc: 'Anti-detección' },
+                                        { val: 'DATACENTER',  label: 'Datacenter',  desc: 'Alta velocidad' },
                                     ].map(t => (
                                         <button
                                             key={t.val}
                                             onClick={() => set('proxyType', t.val)}
-                                            className={`flex-1 p-3 rounded-xl border text-left transition-all ${form.proxyType === t.val ? 'border-[#00ff88]/50 bg-[#00ff88]/5' : 'border-white/10 bg-white/[0.02] hover:bg-white/5'}`}
+                                            className={`flex-1 p-3 rounded-xl border text-left transition-all ${
+                                                form.proxyType === t.val
+                                                    ? 'border-[#00ff88]/50 bg-[#00ff88]/5'
+                                                    : 'border-white/10 bg-white/[0.02] hover:bg-white/5'
+                                            }`}
                                         >
                                             <p className={`text-xs font-black uppercase ${form.proxyType === t.val ? 'text-[#00ff88]' : 'text-white'}`}>{t.label}</p>
                                             <p className="text-[10px] text-[#555] mt-0.5">{t.desc}</p>
@@ -1200,8 +1272,6 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
                                     ))}
                                 </div>
                             </div>
-
-                            {/* País y ciudad */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className={labelCls}>País de la IP *</label>
@@ -1214,37 +1284,30 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
                                     <input className={fieldCls} placeholder="Ej: Madrid, Barcelona..." value={form.city} onChange={e => set('city', e.target.value)} />
                                 </div>
                             </div>
-
-                            {/* Rotación */}
                             <div className="space-y-2">
                                 <label className={labelCls}>Rotación automática de IP</label>
                                 <div className="flex gap-2 flex-wrap">
-                                    {[
-                                        { val: 0,   label: 'Manual' },
-                                        { val: 10,  label: '10 min' },
-                                        { val: 30,  label: '30 min' },
-                                        { val: 60,  label: '1 hora' },
-                                        { val: 120, label: '2 horas' },
-                                    ].map(r => (
+                                    {[{ val: 0, label: 'Manual' }, { val: 10, label: '10 min' }, { val: 30, label: '30 min' }, { val: 60, label: '1 hora' }, { val: 120, label: '2 horas' }].map(r => (
                                         <button
                                             key={r.val}
                                             onClick={() => set('rotationMinutes', r.val)}
-                                            className={`px-4 py-2 rounded-lg border text-xs font-black uppercase transition-all ${form.rotationMinutes === r.val ? 'border-[#00ff88]/50 bg-[#00ff88]/10 text-[#00ff88]' : 'border-white/10 bg-white/[0.02] text-[#666] hover:text-white hover:bg-white/5'}`}
+                                            className={`px-4 py-2 rounded-lg border text-xs font-black uppercase transition-all ${
+                                                form.rotationMinutes === r.val
+                                                    ? 'border-[#00ff88]/50 bg-[#00ff88]/10 text-[#00ff88]'
+                                                    : 'border-white/10 bg-white/[0.02] text-[#666] hover:text-white hover:bg-white/5'
+                                            }`}
                                         >
                                             {r.label}
                                         </button>
                                     ))}
                                 </div>
                             </div>
-
-                            {/* URLs de warm-up */}
                             <div className="space-y-2">
                                 <label className={labelCls}>URLs de Warm-up (una por línea)</label>
                                 <p className="text-[10px] text-[#444]">El navegador visitará estas URLs al crearse para generar historial natural.</p>
                                 <textarea
                                     className={`${fieldCls} resize-none font-mono text-xs`}
                                     rows={4}
-                                    placeholder="https://www.google.com&#10;https://www.youtube.com&#10;https://www.marca.com"
                                     value={form.warmupUrls}
                                     onChange={e => set('warmupUrls', e.target.value)}
                                 />
@@ -1252,28 +1315,29 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
                         </div>
                     )}
 
-                    {/* ─── PASO 3: DISPOSITIVO / HUELLA ─── */}
                     {step === 3 && (
                         <div className="space-y-5 animate-in fade-in slide-in-from-right-4">
-                            {/* Tipo de dispositivo */}
                             <div className="space-y-2">
                                 <label className={labelCls}>Tipo de Dispositivo</label>
                                 <div className="flex gap-3">
                                     {[
                                         { val: 'DESKTOP', icon: '🖥️', label: 'Desktop' },
-                                        { val: 'TABLET',  icon: '📱', label: 'Tablet'  },
-                                        { val: 'MOBILE',  icon: '📲', label: 'Mobile'  },
+                                        { val: 'TABLET',  icon: '📱', label: 'Tablet' },
+                                        { val: 'MOBILE',  icon: '📲', label: 'Mobile' },
                                     ].map(d => (
                                         <button
                                             key={d.val}
                                             onClick={() => {
                                                 set('deviceType', d.val);
-                                                // Ajustar OS y resolución por defecto al cambiar dispositivo
                                                 if (d.val === 'MOBILE')  { set('os', 'Android'); set('screenRes', '390x844'); }
                                                 if (d.val === 'TABLET')  { set('os', 'Android'); set('screenRes', '1280x800'); }
                                                 if (d.val === 'DESKTOP') { set('os', 'Windows'); set('screenRes', '1920x1080'); }
                                             }}
-                                            className={`flex-1 py-4 rounded-xl border text-center transition-all ${form.deviceType === d.val ? 'border-[#00ff88]/50 bg-[#00ff88]/5' : 'border-white/10 bg-white/[0.02] hover:bg-white/5'}`}
+                                            className={`flex-1 py-4 rounded-xl border text-center transition-all ${
+                                                form.deviceType === d.val
+                                                    ? 'border-[#00ff88]/50 bg-[#00ff88]/5'
+                                                    : 'border-white/10 bg-white/[0.02] hover:bg-white/5'
+                                            }`}
                                         >
                                             <div className="text-2xl mb-1">{d.icon}</div>
                                             <p className={`text-xs font-black uppercase ${form.deviceType === d.val ? 'text-[#00ff88]' : 'text-[#888]'}`}>{d.label}</p>
@@ -1281,16 +1345,12 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
                                     ))}
                                 </div>
                             </div>
-
-                            {/* OS y resolución */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className={labelCls}>Sistema Operativo</label>
                                     <select className={fieldCls} value={form.os} onChange={e => set('os', e.target.value)}>
-                                        {form.deviceType === 'DESKTOP'
-                                            ? ['Windows', 'macOS', 'Linux'].map(o => <option key={o}>{o}</option>)
-                                            : ['Android', 'iOS'].map(o => <option key={o}>{o}</option>)
-                                        }
+                                        {(form.deviceType === 'DESKTOP' ? ['Windows', 'macOS', 'Linux'] : ['Android', 'iOS'])
+                                            .map(o => <option key={o}>{o}</option>)}
                                     </select>
                                 </div>
                                 <div className="space-y-2">
@@ -1306,20 +1366,26 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
                                     </select>
                                 </div>
                             </div>
-
-                            {/* Opciones */}
                             <div className="space-y-3">
                                 <label className={labelCls}>Opciones</label>
                                 {[
-                                    { key: 'autoFingerprint', label: 'Huella digital automática', desc: 'Canvas, WebGL y AudioContext se generan basados en la IP asignada' },
-                                    { key: 'openOnCreate',    label: 'Abrir navegador al crear',  desc: 'Lanza el navegador en la primera computadora disponible tras crear el perfil' },
+                                    { key: 'autoFingerprint', label: 'Huella digital automática', desc: 'Canvas, WebGL y AudioContext generados basados en la IP asignada' },
+                                    { key: 'openOnCreate',    label: 'Abrir navegador al crear',  desc: 'Lanza el navegador en la primera computadora disponible' },
                                 ].map(opt => (
                                     <label key={opt.key} className="flex items-start gap-3 cursor-pointer group">
                                         <div
-                                            className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border flex-shrink-0 transition-all ${(form as any)[opt.key] ? 'bg-[#00ff88] border-[#00ff88]' : 'border-white/20 bg-white/5 group-hover:border-white/40'}`}
+                                            className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border flex-shrink-0 transition-all ${
+                                                (form as any)[opt.key]
+                                                    ? 'bg-[#00ff88] border-[#00ff88]'
+                                                    : 'border-white/20 bg-white/5 group-hover:border-white/40'
+                                            }`}
                                             onClick={() => set(opt.key, !(form as any)[opt.key])}
                                         >
-                                            {(form as any)[opt.key] && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                            {(form as any)[opt.key] && (
+                                                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                                                    <path d="M1 4L3.5 6.5L9 1" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                                </svg>
+                                            )}
                                         </div>
                                         <div>
                                             <p className="text-xs font-bold text-white">{opt.label}</p>
@@ -1331,23 +1397,22 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
                         </div>
                     )}
 
-                    {/* ─── PASO 4: RESUMEN ─── */}
                     {step === 4 && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                             <div className="bg-[#00ff88]/5 border border-[#00ff88]/20 rounded-xl p-4">
                                 <p className="text-[10px] font-black text-[#00ff88] uppercase tracking-widest mb-3">Resumen de configuración</p>
                                 <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
                                     {[
-                                        ['Perfil',      form.name],
-                                        ['Propietario', form.owner],
-                                        ['Bookie',      form.bookie],
-                                        ['Deporte',     form.sport],
-                                        ['Proxy',       form.proxyType.replace('_', ' ')],
+                                        ['Perfil',       form.name],
+                                        ['Propietario',  form.owner],
+                                        ['Bookie',       form.bookie],
+                                        ['Deporte',      form.sport],
+                                        ['Proxy',        form.proxyType.replace('_', ' ')],
                                         ['País / Ciudad', `${form.country}${form.city ? ' / ' + form.city : ''}`],
-                                        ['Rotación IP', form.rotationMinutes === 0 ? 'Manual' : `${form.rotationMinutes} min`],
-                                        ['Dispositivo', `${form.deviceType} · ${form.os}`],
-                                        ['Resolución',  form.screenRes],
-                                        ['Idioma',      form.language],
+                                        ['Rotación IP',  form.rotationMinutes === 0 ? 'Manual' : `${form.rotationMinutes} min`],
+                                        ['Dispositivo',  `${form.deviceType} · ${form.os}`],
+                                        ['Resolución',   form.screenRes],
+                                        ['Idioma',       form.language],
                                         ['URLs warm-up', `${form.warmupUrls.split('\n').filter(Boolean).length} URL(s)`],
                                     ].map(([k, v]) => (
                                         <div key={k} className="flex justify-between border-b border-white/5 py-1">
@@ -1360,7 +1425,7 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
                             {form.openOnCreate && (
                                 <div className="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
                                     <Play size={14} className="text-blue-400 flex-shrink-0" />
-                                    <p className="text-xs text-blue-300">El navegador se abrirá automáticamente en la primera computadora online al crear el perfil.</p>
+                                    <p className="text-xs text-blue-300">El navegador se abrirá automáticamente en la primera computadora online.</p>
                                 </div>
                             )}
                         </div>
@@ -1379,7 +1444,9 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
                         <button
                             onClick={() => setStep(s => s + 1)}
                             disabled={!canNext()}
-                            className={`px-8 py-3 font-black uppercase rounded-xl text-xs transition-all flex items-center gap-2 ${canNext() ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white/5 text-[#444] cursor-not-allowed'}`}
+                            className={`px-8 py-3 font-black uppercase rounded-xl text-xs transition-all flex items-center gap-2 ${
+                                canNext() ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white/5 text-[#444] cursor-not-allowed'
+                            }`}
                         >
                             Siguiente <ChevronRight size={14} />
                         </button>
@@ -1398,15 +1465,16 @@ export const CreateProfileModal = ({ isOpen, onClose, onCreate }: {
     );
 };
 
-// 8. SYSTEM DIAGNOSTIC MODAL (NEW)
-export const SystemDiagnosticModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+// ─── SYSTEM DIAGNOSTIC MODAL ─────────────────────────────────────────────────
+
+export const SystemDiagnosticModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
     if (!isOpen) return null;
 
     const services = [
-        { name: 'Base de Datos', status: 'OK', latency: '2ms' },
-        { name: 'API Gateway', status: 'OK', latency: '45ms' },
-        { name: 'Proxy Manager', status: 'OK', latency: '120ms' },
-        { name: 'Node Controller', status: 'OK', latency: '15ms' }
+        { name: 'Base de Datos',   latency: '2ms' },
+        { name: 'API Gateway',     latency: '45ms' },
+        { name: 'Proxy Manager',   latency: '120ms' },
+        { name: 'Node Controller', latency: '15ms' },
     ];
 
     return (
@@ -1414,7 +1482,6 @@ export const SystemDiagnosticModal = ({ isOpen, onClose }: { isOpen: boolean, on
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[110] p-6 shadow-2xl animate-fade-in-up">
                 <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white"><X size={20} /></button>
-
                 <div className="flex items-center gap-4 mb-6">
                     <div className="p-3 bg-[#00ff88]/10 text-[#00ff88] rounded-xl"><Activity size={24} /></div>
                     <div>
@@ -1422,7 +1489,6 @@ export const SystemDiagnosticModal = ({ isOpen, onClose }: { isOpen: boolean, on
                         <p className="text-xs text-[#666]">Estado detallado de la infraestructura</p>
                     </div>
                 </div>
-
                 <div className="space-y-3 mb-6">
                     {services.map((svc, i) => (
                         <div key={i} className="flex justify-between items-center p-4 bg-white/5 border border-white/5 rounded-xl">
@@ -1437,15 +1503,13 @@ export const SystemDiagnosticModal = ({ isOpen, onClose }: { isOpen: boolean, on
                         </div>
                     ))}
                 </div>
-
                 <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl mb-6 flex gap-3">
                     <Info size={16} className="text-blue-500 shrink-0 mt-0.5" />
                     <div>
                         <p className="text-xs font-bold text-blue-500">Todo parece correcto</p>
-                        <p className="text-[10px] text-[#888] mt-1">El sistema responde dentro de los parámetros normales. No se detectan anomalías críticas.</p>
+                        <p className="text-[10px] text-[#888] mt-1">El sistema responde dentro de los parámetros normales.</p>
                     </div>
                 </div>
-
                 <div className="flex gap-3">
                     <button className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl border border-white/5 text-xs uppercase transition-colors">
                         Ver Logs
@@ -1459,8 +1523,9 @@ export const SystemDiagnosticModal = ({ isOpen, onClose }: { isOpen: boolean, on
     );
 };
 
-// 9. RESOURCE DETAIL MODAL (NEW)
-export const ResourceDetailModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+// ─── RESOURCE DETAIL MODAL ───────────────────────────────────────────────────
+
+export const ResourceDetailModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
     if (!isOpen) return null;
 
     return (
@@ -1468,7 +1533,6 @@ export const ResourceDetailModal = ({ isOpen, onClose }: { isOpen: boolean, onCl
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-md relative z-[110] p-6 shadow-2xl animate-fade-in-up">
                 <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white"><X size={20} /></button>
-
                 <div className="flex items-center gap-4 mb-6">
                     <div className="p-3 bg-blue-500/10 text-blue-500 rounded-xl"><Cpu size={24} /></div>
                     <div>
@@ -1476,38 +1540,31 @@ export const ResourceDetailModal = ({ isOpen, onClose }: { isOpen: boolean, onCl
                         <p className="text-xs text-[#666]">Consumo actual de hardware</p>
                     </div>
                 </div>
-
                 <div className="grid grid-cols-3 gap-3 mb-6">
-                    <div className="p-4 bg-[#0a0a0a] border border-white/5 rounded-xl text-center">
-                        <p className="text-[10px] font-bold text-[#666] uppercase mb-1">CPU Total</p>
-                        <p className="text-2xl font-black text-[#00ff88]">42%</p>
-                    </div>
-                    <div className="p-4 bg-[#0a0a0a] border border-white/5 rounded-xl text-center">
-                        <p className="text-[10px] font-bold text-[#666] uppercase mb-1">RAM Uso</p>
-                        <p className="text-2xl font-black text-blue-500">12GB</p>
-                    </div>
-                    <div className="p-4 bg-[#0a0a0a] border border-white/5 rounded-xl text-center">
-                        <p className="text-[10px] font-bold text-[#666] uppercase mb-1">Red</p>
-                        <p className="text-2xl font-black text-amber-500">45mbps</p>
-                    </div>
+                    {[
+                        { label: 'CPU Total', value: '42%',    color: 'text-[#00ff88]' },
+                        { label: 'RAM Uso',   value: '12GB',   color: 'text-blue-500' },
+                        { label: 'Red',       value: '45mbps', color: 'text-amber-500' },
+                    ].map(m => (
+                        <div key={m.label} className="p-4 bg-[#0a0a0a] border border-white/5 rounded-xl text-center">
+                            <p className="text-[10px] font-bold text-[#666] uppercase mb-1">{m.label}</p>
+                            <p className={`text-2xl font-black ${m.color}`}>{m.value}</p>
+                        </div>
+                    ))}
                 </div>
-
                 <h4 className="text-[10px] font-black text-[#666] uppercase mb-3">Mayores Consumidores</h4>
                 <div className="space-y-2 mb-6">
-                    <div className="flex justify-between items-center p-2 border-b border-white/5 text-xs text-[#ccc]">
-                        <span>Node-01 (Main)</span>
-                        <span className="font-mono text-red-500">85% CPU</span>
-                    </div>
-                    <div className="flex justify-between items-center p-2 border-b border-white/5 text-xs text-[#ccc]">
-                        <span>Node-04 (Incubator)</span>
-                        <span className="font-mono text-amber-500">60% CPU</span>
-                    </div>
-                    <div className="flex justify-between items-center p-2 border-b border-white/5 text-xs text-[#ccc]">
-                        <span>DB Server</span>
-                        <span className="font-mono text-[#00ff88]">15% CPU</span>
-                    </div>
+                    {[
+                        { name: 'Node-01 (Main)',       value: '85% CPU', color: 'text-red-500' },
+                        { name: 'Node-04 (Incubator)',  value: '60% CPU', color: 'text-amber-500' },
+                        { name: 'DB Server',            value: '15% CPU', color: 'text-[#00ff88]' },
+                    ].map(item => (
+                        <div key={item.name} className="flex justify-between items-center p-2 border-b border-white/5 text-xs text-[#ccc]">
+                            <span>{item.name}</span>
+                            <span className={`font-mono ${item.color}`}>{item.value}</span>
+                        </div>
+                    ))}
                 </div>
-
                 <button onClick={onClose} className="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl border border-white/5 text-xs uppercase transition-colors">
                     Optimizar Memoria (GC)
                 </button>
@@ -1516,8 +1573,9 @@ export const ResourceDetailModal = ({ isOpen, onClose }: { isOpen: boolean, onCl
     );
 };
 
-// 10. JOB QUEUE MODAL (NEW)
-export const JobQueueModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+// ─── JOB QUEUE MODAL ─────────────────────────────────────────────────────────
+
+export const JobQueueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
     if (!isOpen) return null;
 
     return (
@@ -1525,7 +1583,6 @@ export const JobQueueModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: (
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
             <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[110] p-6 shadow-2xl animate-fade-in-up">
                 <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white"><X size={20} /></button>
-
                 <div className="flex items-center gap-4 mb-6">
                     <div className="p-3 bg-white/10 text-white rounded-xl"><Server size={24} /></div>
                     <div>
@@ -1533,34 +1590,27 @@ export const JobQueueModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: (
                         <p className="text-xs text-[#666]">Cola de procesamiento en tiempo real</p>
                     </div>
                 </div>
-
                 <div className="flex gap-4 mb-6">
-                    <div className="flex-1 p-4 bg-white/5 border border-white/5 rounded-xl text-center">
-                        <span className="block text-2xl font-black text-white">1</span>
-                        <span className="text-[9px] uppercase text-[#666]">En Espera</span>
-                    </div>
-                    <div className="flex-1 p-4 bg-[#00ff88]/10 border border-[#00ff88]/20 rounded-xl text-center">
-                        <span className="block text-2xl font-black text-[#00ff88]">8</span>
-                        <span className="text-[9px] uppercase text-[#00ff88]">Procesando</span>
-                    </div>
-                    <div className="flex-1 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-center">
-                        <span className="block text-2xl font-black text-red-500">0</span>
-                        <span className="text-[9px] uppercase text-red-500">Fallidas</span>
-                    </div>
+                    {[
+                        { val: '1', label: 'En Espera',   cls: 'bg-white/5 border-white/5 text-white' },
+                        { val: '8', label: 'Procesando',  cls: 'bg-[#00ff88]/10 border-[#00ff88]/20 text-[#00ff88]' },
+                        { val: '0', label: 'Fallidas',    cls: 'bg-red-500/10 border-red-500/20 text-red-500' },
+                    ].map(item => (
+                        <div key={item.label} className={`flex-1 p-4 border rounded-xl text-center ${item.cls}`}>
+                            <span className="block text-2xl font-black">{item.val}</span>
+                            <span className="text-[9px] uppercase">{item.label}</span>
+                        </div>
+                    ))}
                 </div>
-
                 <div className="bg-[#0a0a0a] border border-white/5 rounded-xl p-4 mb-6 h-40 overflow-y-auto custom-scrollbar space-y-2">
                     <p className="text-[10px] font-bold text-[#444] uppercase mb-2">Próximas Tareas</p>
-                    <div className="flex justify-between items-center text-xs text-[#ccc] p-2 bg-white/5 rounded">
-                        <span>Sync Odds #2912</span>
-                        <span className="text-[10px] text-[#666]">Pendiente</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs text-[#ccc] p-2 bg-white/5 rounded">
-                        <span>Health Check #991</span>
-                        <span className="text-[10px] text-[#666]">Pendiente</span>
-                    </div>
+                    {[{ name: 'Sync Odds #2912' }, { name: 'Health Check #991' }].map(t => (
+                        <div key={t.name} className="flex justify-between items-center text-xs text-[#ccc] p-2 bg-white/5 rounded">
+                            <span>{t.name}</span>
+                            <span className="text-[10px] text-[#666]">Pendiente</span>
+                        </div>
+                    ))}
                 </div>
-
                 <div className="flex gap-3">
                     <button className="flex-1 py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 font-bold rounded-xl border border-amber-500/20 text-xs uppercase transition-colors">
                         Pausar Cola
@@ -1574,26 +1624,20 @@ export const JobQueueModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: (
     );
 };
 
+// ─── PROXY HISTORY MODAL ─────────────────────────────────────────────────────
+// Fetch eliminado — el padre maneja la carga y pasa logs como prop
+
 export const ProxyHistoryModal = ({
     conn,
+    logs    = [],
+    loading = false,
     onClose,
 }: {
-    conn: import('../types/orchestratorTypes').ConnectionItem | null;
-    onClose: () => void;
+    conn:     ConnectionItem | null;
+    logs?:    any[];
+    loading?: boolean;
+    onClose:  () => void;
 }) => {
-    const [logs, setLogs]       = React.useState<any[]>([]);
-    const [loading, setLoading] = React.useState(false);
-
-    React.useEffect(() => {
-        if (!conn) { setLogs([]); return; }
-        setLoading(true);
-        fetch(`/api/v1/proxy-rotation/${conn.id}/history`)
-            .then(r => r.json())
-            .then(d => setLogs(d.items ?? []))
-            .catch(() => setLogs([]))
-            .finally(() => setLoading(false));
-    }, [conn]);
-
     if (!conn) return null;
 
     return (
@@ -1604,7 +1648,6 @@ export const ProxyHistoryModal = ({
                     <X size={20} />
                 </button>
 
-                {/* Header */}
                 <div className="flex items-center gap-3 mb-1">
                     <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500">
                         <RefreshCw size={22} />
@@ -1615,12 +1658,10 @@ export const ProxyHistoryModal = ({
                     </div>
                 </div>
 
-                {/* Contador */}
                 <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-4 ml-1">
                     {logs.length} rotaciones registradas
                 </p>
 
-                {/* Lista */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {loading ? (
                         <div className="py-12 text-center">
@@ -1633,36 +1674,19 @@ export const ProxyHistoryModal = ({
                         </div>
                     ) : (
                         <div className="border border-white/5 rounded-xl overflow-hidden">
-                            {logs.map((log) => (
-                                <div key={log.id} className="flex items-start gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
-
-                                    {/* Icono estado */}
+                            {logs.map((log, i) => (
+                                <div key={log.id ?? i} className="flex items-start gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
                                     <div className={`shrink-0 size-7 rounded-lg flex items-center justify-center mt-0.5 ${
-                                        log.success
-                                            ? 'bg-blue-500/10 text-blue-400'
-                                            : 'bg-red-500/10 text-red-400'
+                                        log.success ? 'bg-blue-500/10 text-blue-400' : 'bg-red-500/10 text-red-400'
                                     }`}>
-                                        {log.success
-                                            ? <RefreshCw size={12} />
-                                            : <AlertTriangle size={12} />
-                                        }
+                                        {log.success ? <RefreshCw size={12} /> : <AlertTriangle size={12} />}
                                     </div>
-
-                                    {/* Info */}
-                                    <div className="flex-1 ">
+                                    <div className="flex-1">
                                         {log.success ? (
                                             <>
                                                 <div className="flex items-center gap-1.5 flex-wrap">
-
-                                                    <span className="text-[10px] text-[#888] font-mono break-all">
-                                                        {log.old_proxy}
-                                                    </span>
-                                                    <span className="text-[10px] text-blue-400 font-mono break-all">
-                                                        {log.new_proxy}
-                                                    </span>
-                                                    <span className="text-[9px] text-[#555] mt-0.5 font-mono break-all">
-                                                        {log.error_message ?? 'Error desconocido'}
-                                                    </span>
+                                                    <span className="text-[10px] text-[#888] font-mono break-all">{log.old_proxy}</span>
+                                                    <span className="text-[10px] text-blue-400 font-mono break-all">{log.new_proxy}</span>
                                                 </div>
                                                 {log.latency_ms && (
                                                     <p className="text-[9px] text-[#555] mt-0.5">
@@ -1679,8 +1703,6 @@ export const ProxyHistoryModal = ({
                                             </>
                                         )}
                                     </div>
-
-                                    {/* Fecha */}
                                     <div className="text-right shrink-0">
                                         <p className="text-[9px] text-[#555] font-mono">
                                             {new Date(log.rotated_at).toLocaleDateString()}

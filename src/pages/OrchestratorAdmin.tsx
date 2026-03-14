@@ -10,8 +10,9 @@ import {
     SkeletonRow, SkeletonKPI
 } from '../components/OrchestratorComponents';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getOrchestratorData } from '../services/orchestratorMocks';
+import { orchestratorService } from '@/services/orchestrator.service';
 import { ComputerNode, ProfileItem, Alert } from '../types/orchestratorTypes';
+
 
 // --- DRAWER: COMPUTER DETAILS ---
 const ComputerDrawer = ({ node, onClose }: { node: ComputerNode | null, onClose: () => void }) => {
@@ -129,10 +130,17 @@ const OrchestratorAdmin: React.FC = () => {
 
     useEffect(() => {
         setIsLoading(true);
-        getOrchestratorData().then(data => {
-            setNodes(data.nodes);
-            setProfiles(data.profiles);
-            setAlerts(data.alerts);
+        Promise.all([
+            orchestratorService.getNodes(),
+            orchestratorService.getProfiles(),
+            orchestratorService.getAlerts(),
+        ]).then(([nodes, profiles, alerts]) => {
+            setNodes(nodes);
+            setProfiles(profiles);
+            setAlerts(alerts);
+            setIsLoading(false);
+        }).catch(err => {
+            console.error('[OrchestratorAdmin] Error cargando datos:', err);
             setIsLoading(false);
         });
     }, []);
@@ -313,11 +321,12 @@ const OrchestratorAdmin: React.FC = () => {
                         {/* Table Header */}
                         <div className="grid grid-cols-12 gap-2 md:gap-4 p-3 border-b border-white/5 bg-white/[0.01] text-[9px] font-black text-[#666] uppercase tracking-wider pl-4">
                             <div className="col-span-4 md:col-span-3">Perfil</div>
-                            <div className="col-span-3 md:col-span-2">Estado</div>
-                            <div className="col-span-2 hidden md:block">Latencia</div>
-                            <div className="col-span-2 hidden md:block">Memoria</div>
-                            <div className="col-span-3 md:col-span-2">Nodo</div>
-                            <div className="col-span-2 md:col-span-1 text-right pr-2">Hist.</div>
+                            <div className="col-span-2 hidden md:block">Proxy</div>
+                            <div className="col-span-2 hidden md:block">Cookies</div>
+                            <div className="col-span-2">Score</div>
+                            <div className="col-span-2 hidden md:block">Última Acción</div>
+                            <div className="col-span-2 md:col-span-1 text-right pr-2">Acc.</div>
+
                         </div>
                         {/* Body */}
                         <div>
@@ -329,7 +338,12 @@ const OrchestratorAdmin: React.FC = () => {
                                 </>
                             ) : filteredProfiles.length > 0 ? (
                                 filteredProfiles.map(profile => (
-                                    <ProfileRow key={profile.id} profile={profile} onHistory={() => setSelectedProfile(profile)} />
+                                    <ProfileRow
+                                        key={profile.id}
+                                        profile={profile}
+                                        onHistory={() => setSelectedProfile(profile)}
+                                        onSecurity={() => {}}
+                                    />
                                 ))
                             ) : (
                                 <div className="p-8 text-center text-[#444] text-xs">No profiles found</div>

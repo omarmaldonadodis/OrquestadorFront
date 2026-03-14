@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { ComputerNode, ProfileItem, Alert, Job, SystemEvent, ServiceStatus } from '../types/orchestratorTypes';
 import { timeAgo } from '../utils/time';
+import { ConnectionItem } from '../types/orchestratorTypes';
+
 
 
 // --- SKELETON COMPONENTS ---
@@ -124,7 +126,19 @@ export const ComputerRow = ({ node, onClick }: { node: ComputerNode, onClick: ()
 };
 
 // --- PROFILE ROW (TABLE STYLE) ---
-export const ProfileRow = ({ profile, onHistory, onSecurity }: { profile: ProfileItem, onHistory: () => void, onSecurity: () => void }) => {
+export const ProfileRow = ({
+    profile,
+    connections = [],
+    onHistory,
+    onSecurity
+}: {
+    profile:     ProfileItem;
+    connections?: ConnectionItem[];   // ← opcional para no romper OrchestratorAdmin
+    onHistory:   () => void;
+    onSecurity:  () => void;
+}) => {
+    const activeConn = connections.find(c => c.id === String(profile.proxyId));
+
     const getStatusStyle = (s: string) => {
         if (s === 'HEALTHY' || s === 'RUNNING') return 'text-[#00ff88] bg-[#00ff88]/10 border-[#00ff88]/20';
         if (s === 'SLOW' || s === 'WARMING') return 'text-amber-500 bg-amber-500/10 border-amber-500/20';

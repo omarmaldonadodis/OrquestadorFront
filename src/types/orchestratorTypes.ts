@@ -23,7 +23,8 @@ export interface ComputerNode {
     cpu: number;
     ram: number;
     uptime: string;
-    lastUpdate: string;
+    lastUpdate: string; 
+    connected_since_ts?: number | null;
 }
 
 export interface ProfileItem {
