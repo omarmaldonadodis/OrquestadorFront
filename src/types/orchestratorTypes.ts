@@ -59,6 +59,25 @@ export interface Alert {
     read: boolean;
 }
 
+export interface HealthDetails {
+  nodeScore: number; // 0-100
+  proxyScore: number; // 0-100
+  alertScore: number; // 0-100
+  adspowerScore: number; // 0-100
+  infraScore: number; // 0-100
+  factors: {
+    nodesOnline: number;
+    nodesTotal: number;
+    proxySuccessRate: number; // 0-100
+    avgProxyLatency: number; // ms
+    criticalAlerts: number;
+    warningAlerts: number;
+    adspowerHealthy: boolean;
+    dbHealthy: boolean;
+    redisHealthy: boolean;
+    activeSessions: number;
+  };
+}
 export interface KPIStats {
     nodesOnline: number;
     nodesTotal: number;
@@ -68,6 +87,7 @@ export interface KPIStats {
     alertsActive: number;
     healthScore: number;
     healthRisks: string[];
+    healthDetails?: HealthDetails;
 }
 
 export interface SystemEvent {

@@ -1,5 +1,5 @@
 // src/hooks/useOrchestratorData.ts
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from "react";
 import { orchestratorService } from '@/services/orchestrator.service';
 import {
     ComputerNode, ProfileItem, Alert, KPIStats,
@@ -120,12 +120,35 @@ export function useOrchestratorData() {
         ));
     }, []);
 
+    // ── Refresca solo los servicios cada 20s ─────────────────────────
+    const refreshServices = useCallback(async () => {
+        try {
+            const svc = await orchestratorService.getServicesStatus();
+            setServices(svc);
+        } catch (err) {
+            console.error('[useOrchestratorData] refreshServices failed:', err);
+        }
+    }, []);
+
+    useEffect(() => {
+        // carga inmediata al montar
+        refreshServices();
+
+        const interval = setInterval(() => {
+            if (!document.hidden) refreshServices();
+        }, 20_000); // cada 20 segundos
+
+        return () => clearInterval(interval);
+    }, [refreshServices]);
+    // ─────────────────────────────────────────────────────────────────
+
     return {
         // Estado
         stats, nodes, profiles, alerts, events, services, connections, backupStatus,
         loading, refreshing,
         // Acciones
         fetchData, debouncedFetch,
+        setStats, 
         setAlerts, setEvents, setProfiles,
         // Actualizaciones en tiempo real
         updateNodeLive, markNodeOnline, markNodeOffline,

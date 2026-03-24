@@ -12,9 +12,9 @@ import {
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
 interface NodeDrawerProps {
-    node:    ComputerNode | null;
+    node: ComputerNode | null;
     history: { time: string; cpu: number; ram: number }[];
-    logs:    { timestamp: string; level: string; message: string }[];
+    logs: { timestamp: string; level: string; message: string }[];
     onClose: () => void;
 }
 
@@ -23,14 +23,14 @@ interface NodeDrawerProps {
 
 export const EventDetailModal = ({
     event,
-    pages        = [],
+    pages = [],
     loadingPages = false,
     onClose,
 }: {
-    event:         SystemEvent | null;
-    pages?:        { id: number; url: string; timestamp: string }[];
+    event: SystemEvent | null;
+    pages?: { id: number; url: string; timestamp: string }[];
     loadingPages?: boolean;
-    onClose:       () => void;
+    onClose: () => void;
 }) => {
     if (!event) return null;
 
@@ -45,11 +45,10 @@ export const EventDetailModal = ({
                     <X size={20} />
                 </button>
 
-                <div className={`size-12 rounded-xl flex items-center justify-center mb-4 ${
-                    event.type === 'SUCCESS' ? 'bg-[#00ff88]/10 text-[#00ff88]' :
-                    event.type === 'ERROR'   ? 'bg-red-500/10 text-red-500'     :
-                                               'bg-blue-500/10 text-blue-500'
-                }`}>
+                <div className={`size-12 rounded-xl flex items-center justify-center mb-4 ${event.type === 'SUCCESS' ? 'bg-[#00ff88]/10 text-[#00ff88]' :
+                        event.type === 'ERROR' ? 'bg-red-500/10 text-red-500' :
+                            'bg-blue-500/10 text-blue-500'
+                    }`}>
                     <Activity size={24} />
                 </div>
 
@@ -70,21 +69,19 @@ export const EventDetailModal = ({
                         <div className="bg-[#080808] border border-white/5 rounded-xl overflow-hidden">
                             <div className="max-h-44 overflow-y-auto custom-scrollbar">
                                 {proxyLog.map((line, i) => {
-                                    const isOk      = line.startsWith('✓');
+                                    const isOk = line.startsWith('✓');
                                     const isRotated = line.startsWith('↺');
                                     return (
                                         <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.04] last:border-0">
-                                            <p className={`text-[10px] font-mono truncate flex-1 ${
-                                                isOk      ? 'text-[#888]'   :
-                                                isRotated ? 'text-blue-400' : 'text-red-400'
-                                            }`}>
+                                            <p className={`text-[10px] font-mono truncate flex-1 ${isOk ? 'text-[#888]' :
+                                                    isRotated ? 'text-blue-400' : 'text-red-400'
+                                                }`}>
                                                 {line.slice(2)}
                                             </p>
-                                            <span className={`text-[9px] font-black uppercase shrink-0 px-1.5 py-0.5 rounded ${
-                                                isOk      ? 'text-[#00ff88] bg-[#00ff88]/10' :
-                                                isRotated ? 'text-blue-400 bg-blue-400/10'   :
-                                                            'text-red-400 bg-red-400/10'
-                                            }`}>
+                                            <span className={`text-[9px] font-black uppercase shrink-0 px-1.5 py-0.5 rounded ${isOk ? 'text-[#00ff88] bg-[#00ff88]/10' :
+                                                    isRotated ? 'text-blue-400 bg-blue-400/10' :
+                                                        'text-red-400 bg-red-400/10'
+                                                }`}>
                                                 {isOk ? 'OK' : isRotated ? 'ROTADO' : 'FALLO'}
                                             </span>
                                         </div>
@@ -138,8 +135,8 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
     if (!node) return null;
 
     const isOnline = node.status === 'ONLINE';
-    const maxCpu   = Math.max(...history.map(p => p.cpu), 1);
-    const maxRam   = Math.max(...history.map(p => p.ram), 1);
+    const maxCpu = Math.max(...history.map(p => p.cpu), 1);
+    const maxRam = Math.max(...history.map(p => p.ram), 1);
 
     return (
         <>
@@ -151,9 +148,8 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <h2 className="text-xl font-black text-white tracking-tighter italic">{node.name}</h2>
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
-                                isOnline ? 'bg-[#00ff88]/10 text-[#00ff88]' : 'bg-red-500/10 text-red-500'
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${isOnline ? 'bg-[#00ff88]/10 text-[#00ff88]' : 'bg-red-500/10 text-red-500'
+                                }`}>
                                 {node.status}
                             </span>
                         </div>
@@ -203,16 +199,15 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
                             <div className="h-24 flex items-end gap-[2px] bg-[#080808] border border-white/5 rounded-lg px-2 pt-2 pb-1 overflow-hidden">
                                 {history.map((pt, i) => {
                                     const heightPct = Math.max((pt.cpu / maxCpu) * 100, 4);
-                                    const isLast    = i === history.length - 1;
+                                    const isLast = i === history.length - 1;
                                     return (
                                         <div
                                             key={i}
                                             title={`${pt.time}: ${pt.cpu}%`}
-                                            className={`flex-1 rounded-t-[2px] transition-all ${
-                                                isLast
+                                            className={`flex-1 rounded-t-[2px] transition-all ${isLast
                                                     ? 'bg-[#3b82f6]'
                                                     : pt.cpu > 80 ? 'bg-red-500/70' : 'bg-[#3b82f6]/50'
-                                            }`}
+                                                }`}
                                             style={{ height: `${heightPct}%` }}
                                         />
                                     );
@@ -241,16 +236,15 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
                             <div className="h-24 flex items-end gap-[2px] bg-[#080808] border border-white/5 rounded-lg px-2 pt-2 pb-1 overflow-hidden">
                                 {history.map((pt, i) => {
                                     const heightPct = Math.max((pt.ram / maxRam) * 100, 4);
-                                    const isLast    = i === history.length - 1;
+                                    const isLast = i === history.length - 1;
                                     return (
                                         <div
                                             key={i}
                                             title={`${pt.time}: ${pt.ram}%`}
-                                            className={`flex-1 rounded-t-[2px] transition-all ${
-                                                isLast
+                                            className={`flex-1 rounded-t-[2px] transition-all ${isLast
                                                     ? 'bg-purple-500'
                                                     : pt.ram > 85 ? 'bg-red-500/70' : 'bg-purple-500/50'
-                                            }`}
+                                                }`}
                                             style={{ height: `${heightPct}%` }}
                                         />
                                     );
@@ -271,8 +265,8 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
                                 logs.map((log, i) => (
                                     <p key={i} className={
                                         log.level === 'WARNING' ? 'text-amber-500' :
-                                        log.level === 'ERROR'   ? 'text-red-500'   :
-                                        log.level === 'SUCCESS' ? 'text-[#00ff88]' : 'text-[#666]'
+                                            log.level === 'ERROR' ? 'text-red-500' :
+                                                log.level === 'SUCCESS' ? 'text-[#00ff88]' : 'text-[#666]'
                                     }>
                                         &gt; [{new Date(log.timestamp).toLocaleTimeString()}] {log.message}
                                     </p>
@@ -301,9 +295,9 @@ export const AlertModal = ({
     onClose,
     onAck,
 }: {
-    alert:   Alert | null;
+    alert: Alert | null;
     onClose: () => void;
-    onAck:   (id: number) => void;
+    onAck: (id: number) => void;
 }) => {
     if (!alert) return null;
 
@@ -316,9 +310,8 @@ export const AlertModal = ({
                 </button>
 
                 <div className="flex items-center gap-3 mb-6">
-                    <div className={`p-3 rounded-xl ${
-                        alert.severity === 'Critical' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
-                    }`}>
+                    <div className={`p-3 rounded-xl ${alert.severity === 'Critical' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
+                        }`}>
                         <AlertTriangle size={24} />
                     </div>
                     <div>
@@ -360,10 +353,10 @@ export const SessionHistoryModal = ({
     profileId,
     onClose,
 }: {
-    isOpen:    boolean;
-    events:    SystemEvent[];
+    isOpen: boolean;
+    events: SystemEvent[];
     profileId: string | null;
-    onClose:   () => void;
+    onClose: () => void;
 }) => {
     if (!isOpen || !profileId) return null;
 
@@ -394,10 +387,9 @@ export const SessionHistoryModal = ({
                         events.map((ev, i) => (
                             <div key={ev.id} className="flex gap-4 relative">
                                 <div className="flex flex-col items-center">
-                                    <div className={`size-3 rounded-full border-2 border-[#0c0c0c] z-10 ${
-                                        ev.type === 'SUCCESS' ? 'bg-[#00ff88]' :
-                                        ev.type === 'ERROR'   ? 'bg-red-500'   : 'bg-blue-500'
-                                    }`} />
+                                    <div className={`size-3 rounded-full border-2 border-[#0c0c0c] z-10 ${ev.type === 'SUCCESS' ? 'bg-[#00ff88]' :
+                                            ev.type === 'ERROR' ? 'bg-red-500' : 'bg-blue-500'
+                                        }`} />
                                     {i < events.length - 1 && (
                                         <div className="w-px flex-1 bg-white/10 my-1" />
                                     )}
@@ -419,7 +411,7 @@ export const SessionHistoryModal = ({
                                                 {(ev.meta.log as string[]).map((line: string, li: number) => (
                                                     <div key={li} className={
                                                         line.startsWith('✓') ? 'text-green-500' :
-                                                        line.startsWith('↺') ? 'text-blue-400'  : 'text-red-400'
+                                                            line.startsWith('↺') ? 'text-blue-400' : 'text-red-400'
                                                     }>
                                                         {line}
                                                     </div>
@@ -461,8 +453,8 @@ export const SessionHistoryModal = ({
 export const JobDrawer = ({ job, onClose }: { job: Job | null; onClose: () => void }) => {
     if (!job) return null;
 
-    const isRunning   = job.status === 'RUNNING';
-    const isFailed    = job.status === 'FAILED';
+    const isRunning = job.status === 'RUNNING';
+    const isFailed = job.status === 'FAILED';
 
     return (
         <>
@@ -472,11 +464,10 @@ export const JobDrawer = ({ job, onClose }: { job: Job | null; onClose: () => vo
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <h2 className="text-xl font-black text-white tracking-tighter italic">{job.name}</h2>
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
-                                isRunning ? 'bg-blue-500/10 text-blue-500' :
-                                isFailed  ? 'bg-red-500/10 text-red-500'  :
-                                            'bg-[#00ff88]/10 text-[#00ff88]'
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${isRunning ? 'bg-blue-500/10 text-blue-500' :
+                                    isFailed ? 'bg-red-500/10 text-red-500' :
+                                        'bg-[#00ff88]/10 text-[#00ff88]'
+                                }`}>
                                 {job.status}
                             </span>
                         </div>
@@ -504,11 +495,10 @@ export const JobDrawer = ({ job, onClose }: { job: Job | null; onClose: () => vo
                             <span>Start: {job.startTime}</span>
                         </div>
                         {job.barrierStatus && (
-                            <div className={`mt-4 p-3 rounded-lg border flex items-center gap-3 ${
-                                job.barrierStatus === 'SYNCED'  ? 'bg-[#00ff88]/5 border-[#00ff88]/20 text-[#00ff88]' :
-                                job.barrierStatus === 'TIMEOUT' ? 'bg-red-500/5 border-red-500/20 text-red-500'       :
-                                                                   'bg-blue-500/5 border-blue-500/20 text-blue-500'
-                            }`}>
+                            <div className={`mt-4 p-3 rounded-lg border flex items-center gap-3 ${job.barrierStatus === 'SYNCED' ? 'bg-[#00ff88]/5 border-[#00ff88]/20 text-[#00ff88]' :
+                                    job.barrierStatus === 'TIMEOUT' ? 'bg-red-500/5 border-red-500/20 text-red-500' :
+                                        'bg-blue-500/5 border-blue-500/20 text-blue-500'
+                                }`}>
                                 <Activity size={16} />
                                 <div>
                                     <p className="text-[10px] font-black uppercase">Barrier Status: {job.barrierStatus}</p>
@@ -555,20 +545,20 @@ export const DashKPIModal = ({
     data,
     onClose,
 }: {
-    type:    string | null;
-    data:    any;
+    type: string | null;
+    data: any;
     onClose: () => void;
 }) => {
     if (!type) return null;
 
     const getTitle = () => {
         switch (type) {
-            case 'NODES':           return 'Computadoras Online';
-            case 'PROFILES':        return 'Perfiles Activos';
-            case 'BROWSERS':        return 'Navegadores Abiertos';
-            case 'ALERTS':          return 'Alertas Activas';
+            case 'NODES': return 'Computadoras Online';
+            case 'PROFILES': return 'Perfiles Activos';
+            case 'BROWSERS': return 'Navegadores Abiertos';
+            case 'ALERTS': return 'Alertas Activas';
             case 'NETWORK_MONITOR': return 'Monitor de Red (Proxy/IP)';
-            default:                return 'Detalle';
+            default: return 'Detalle';
         }
     };
 
@@ -595,9 +585,9 @@ export const DashKPIModal = ({
                                     <p className="text-[10px] text-[#666] uppercase">{item.status || item.severity || item.id}</p>
                                 </div>
                                 <div className="text-right">
-                                    {type === 'NODES'    && <span className="text-[#00ff88] text-xs font-mono">{item.cpu}% CPU</span>}
+                                    {type === 'NODES' && <span className="text-[#00ff88] text-xs font-mono">{item.cpu}% CPU</span>}
                                     {type === 'PROFILES' && <span className="text-blue-500 text-xs font-mono">{item.memory}MB</span>}
-                                    {type === 'ALERTS'   && <span className="text-red-500 text-xs font-bold">{item.severity}</span>}
+                                    {type === 'ALERTS' && <span className="text-red-500 text-xs font-bold">{item.severity}</span>}
                                     {type === 'BROWSERS' && <span className="text-amber-500 text-xs font-mono">{item.openBrowsers} Tabs</span>}
                                 </div>
                             </div>
@@ -639,11 +629,10 @@ export const DashFiltersDrawer = ({ isOpen, onClose, filters, setFilters, onRese
                                 <button
                                     key={t}
                                     onClick={() => setFilters({ ...filters, timeRange: t })}
-                                    className={`py-2 text-xs font-bold rounded border ${
-                                        filters.timeRange === t
+                                    className={`py-2 text-xs font-bold rounded border ${filters.timeRange === t
                                             ? 'bg-[#00ff88] text-black border-[#00ff88]'
                                             : 'bg-white/5 text-[#ccc] border-white/5'
-                                    }`}
+                                        }`}
                                 >
                                     {t}
                                 </button>
@@ -720,8 +709,8 @@ export const HealthDetailModal = ({
     score,
     onClose,
 }: {
-    isOpen:  boolean;
-    score:   number;
+    isOpen: boolean;
+    score: number;
     onClose: () => void;
 }) => {
     if (!isOpen) return null;
@@ -739,8 +728,8 @@ export const HealthDetailModal = ({
 
                 <div className="space-y-4 mb-6">
                     {[
-                        { label: 'Tiempo de Respuesta',    value: '45ms',   color: 'text-[#00ff88]', impact: 'Alto' },
-                        { label: 'Tasa de Errores',        value: '0.02%',  color: 'text-green-500', impact: 'Crítico' },
+                        { label: 'Tiempo de Respuesta', value: '45ms', color: 'text-[#00ff88]', impact: 'Alto' },
+                        { label: 'Tasa de Errores', value: '0.02%', color: 'text-green-500', impact: 'Crítico' },
                         { label: 'Disponibilidad (Uptime)', value: '99.9%', color: 'text-[#00ff88]', impact: 'Medio' },
                     ].map(item => (
                         <div key={item.label} className="p-4 bg-white/5 rounded-xl flex justify-between items-center border border-white/5">
@@ -843,15 +832,15 @@ export const SecurityCheckModal = ({
     onClose,
     onVerify,
 }: {
-    profile:  ProfileItem | null;
-    onClose:  () => void;
+    profile: ProfileItem | null;
+    onClose: () => void;
     onVerify: (id: string) => void;
 }) => {
     if (!profile) return null;
 
-    const browserScore     = profile.browserScore     || 0;
+    const browserScore = profile.browserScore || 0;
     const fingerprintScore = profile.fingerprintScore || 0;
-    const isCookiesOk      = profile.cookieStatus === 'OK';
+    const isCookiesOk = profile.cookieStatus === 'OK';
 
     return (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
@@ -874,22 +863,20 @@ export const SecurityCheckModal = ({
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className={`p-4 rounded-xl border ${
-                        browserScore >= 80 ? 'bg-[#00ff88]/5 border-[#00ff88]/20' :
-                        browserScore >= 60 ? 'bg-amber-500/5 border-amber-500/20'  :
-                                             'bg-red-500/5 border-red-500/20'
-                    }`}>
+                    <div className={`p-4 rounded-xl border ${browserScore >= 80 ? 'bg-[#00ff88]/5 border-[#00ff88]/20' :
+                            browserScore >= 60 ? 'bg-amber-500/5 border-amber-500/20' :
+                                'bg-red-500/5 border-red-500/20'
+                        }`}>
                         <div className="flex justify-between items-start mb-2">
                             <span className="text-[10px] font-black uppercase text-[#888]">Browser Score</span>
                             <Fingerprint size={16} className={
                                 browserScore >= 80 ? 'text-[#00ff88]' :
-                                browserScore >= 60 ? 'text-amber-500' : 'text-red-500'
+                                    browserScore >= 60 ? 'text-amber-500' : 'text-red-500'
                             } />
                         </div>
-                        <p className={`text-3xl font-black ${
-                            browserScore >= 80 ? 'text-[#00ff88]' :
-                            browserScore >= 60 ? 'text-amber-500' : 'text-red-500'
-                        }`}>
+                        <p className={`text-3xl font-black ${browserScore >= 80 ? 'text-[#00ff88]' :
+                                browserScore >= 60 ? 'text-amber-500' : 'text-red-500'
+                            }`}>
                             {browserScore}%
                         </p>
                         <p className="text-[9px] text-[#666] mt-1">Integridad de huella digital</p>
@@ -953,23 +940,23 @@ export const SessionStartModal = ({
     profiles,
     onStart,
 }: {
-    isOpen:    boolean;
-    onClose:   () => void;
-    profiles:  ProfileItem[];
-    onStart:   (ids: string[]) => void;
+    isOpen: boolean;
+    onClose: () => void;
+    profiles: ProfileItem[];
+    onStart: (ids: string[]) => void;
 }) => {
     const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
-    const [filterMode, setFilterMode]   = React.useState<'ALL' | 'OWNER' | 'BOOKIE'>('ALL');
+    const [filterMode, setFilterMode] = React.useState<'ALL' | 'OWNER' | 'BOOKIE'>('ALL');
     const [activeFilter, setActiveFilter] = React.useState<string | null>(null);
 
-    const owners  = Array.from(new Set(profiles.map(p => p.owner).filter(Boolean))) as string[];
+    const owners = Array.from(new Set(profiles.map(p => p.owner).filter(Boolean))) as string[];
     const bookies = Array.from(new Set(profiles.map(p => p.bookie).filter(Boolean))) as string[];
 
     if (!isOpen) return null;
 
     const filteredProfiles = profiles.filter(p => {
-        if (filterMode === 'ALL')   return true;
-        if (filterMode === 'OWNER'  && activeFilter) return p.owner  === activeFilter;
+        if (filterMode === 'ALL') return true;
+        if (filterMode === 'OWNER' && activeFilter) return p.owner === activeFilter;
         if (filterMode === 'BOOKIE' && activeFilter) return p.bookie === activeFilter;
         return true;
     });
@@ -1003,9 +990,8 @@ export const SessionStartModal = ({
                                 <button
                                     key={mode}
                                     onClick={() => { setFilterMode(mode); setActiveFilter(null); }}
-                                    className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-colors ${
-                                        filterMode === mode ? 'bg-[#00ff88] text-black' : 'text-[#666] hover:text-white'
-                                    }`}
+                                    className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-colors ${filterMode === mode ? 'bg-[#00ff88] text-black' : 'text-[#666] hover:text-white'
+                                        }`}
                                 >
                                     {mode === 'OWNER' ? 'Dueños' : 'Bookies'}
                                 </button>
@@ -1021,11 +1007,10 @@ export const SessionStartModal = ({
                                 <button
                                     key={owner}
                                     onClick={() => setActiveFilter(owner)}
-                                    className={`w-full text-left p-3 rounded-lg border text-[10px] font-bold uppercase transition-all ${
-                                        activeFilter === owner
+                                    className={`w-full text-left p-3 rounded-lg border text-[10px] font-bold uppercase transition-all ${activeFilter === owner
                                             ? 'bg-[#00ff88]/10 border-[#00ff88] text-[#00ff88]'
                                             : 'bg-white/5 border-transparent text-[#aaa] hover:bg-white/10'
-                                    }`}
+                                        }`}
                                 >
                                     {owner}
                                 </button>
@@ -1034,11 +1019,10 @@ export const SessionStartModal = ({
                                 <button
                                     key={bookie}
                                     onClick={() => setActiveFilter(bookie)}
-                                    className={`w-full text-left p-3 rounded-lg border text-[10px] font-bold uppercase transition-all ${
-                                        activeFilter === bookie
+                                    className={`w-full text-left p-3 rounded-lg border text-[10px] font-bold uppercase transition-all ${activeFilter === bookie
                                             ? 'bg-[#00ff88]/10 border-[#00ff88] text-[#00ff88]'
                                             : 'bg-white/5 border-transparent text-[#aaa] hover:bg-white/10'
-                                    }`}
+                                        }`}
                                 >
                                     {bookie}
                                 </button>
@@ -1075,14 +1059,12 @@ export const SessionStartModal = ({
                             <div
                                 key={p.id}
                                 onClick={() => toggleProfile(p.id)}
-                                className={`grid grid-cols-12 gap-2 p-3 border-b border-white/5 items-center hover:bg-white/5 cursor-pointer transition-colors ${
-                                    selectedIds.includes(p.id) ? 'bg-[#00ff88]/5' : ''
-                                }`}
+                                className={`grid grid-cols-12 gap-2 p-3 border-b border-white/5 items-center hover:bg-white/5 cursor-pointer transition-colors ${selectedIds.includes(p.id) ? 'bg-[#00ff88]/5' : ''
+                                    }`}
                             >
                                 <div className="col-span-1 flex justify-center">
-                                    <div className={`size-4 rounded border flex items-center justify-center ${
-                                        selectedIds.includes(p.id) ? 'bg-[#00ff88] border-[#00ff88]' : 'border-white/20'
-                                    }`}>
+                                    <div className={`size-4 rounded border flex items-center justify-center ${selectedIds.includes(p.id) ? 'bg-[#00ff88] border-[#00ff88]' : 'border-white/20'
+                                        }`}>
                                         {selectedIds.includes(p.id) && <CheckCircle2 size={12} className="text-black" />}
                                     </div>
                                 </div>
@@ -1134,13 +1116,16 @@ export const CreateProfileModal = ({
     onClose,
     onCreate,
 }: {
-    isOpen:   boolean;
-    onClose:  () => void;
+    isOpen: boolean;
+    onClose: () => void;
     onCreate: (data: any) => void;
 }) => {
-    const [step, setStep]           = React.useState(1);
+    const [soaxCountries, setSoaxCountries] = React.useState<{ code: string, name: string }[]>([]);
+    const [soaxCities, setSoaxCities] = React.useState<string[]>([]);
+    const [loadingCities, setLoadingCities] = React.useState(false);
+    const [step, setStep] = React.useState(1);
     const [submitting, setSubmitting] = React.useState(false);
-    const [form, setForm]           = React.useState({
+    const [form, setForm] = React.useState({
         name: '', owner: '', bookie: 'Bet365', sport: 'Fútbol',
         proxyType: 'RESIDENTIAL', country: 'ES', city: '', rotationMinutes: 30,
         warmupUrls: 'https://www.google.com\nhttps://www.youtube.com',
@@ -1150,20 +1135,22 @@ export const CreateProfileModal = ({
 
     const set = (k: string, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
-    const STEPS    = ['Info General', 'Proxy / Red', 'Dispositivo', 'Resumen'];
-    const BOOKIES  = ['Bet365', '1xBet', 'Betfair', 'Pinnacle', 'William Hill', 'Bwin', 'Unibet', 'Codere', 'Betway'];
-    const SPORTS   = ['Fútbol', 'Tenis', 'Baloncesto', 'Béisbol', 'Hockey', 'Fórmula 1', 'eSports'];
-    const COUNTRIES = [
-        { code: 'ES', name: '🇪🇸 España' }, { code: 'IT', name: '🇮🇹 Italia' },
-        { code: 'GB', name: '🇬🇧 Reino Unido' }, { code: 'DE', name: '🇩🇪 Alemania' },
-        { code: 'FR', name: '🇫🇷 Francia' }, { code: 'BR', name: '🇧🇷 Brasil' },
-        { code: 'MX', name: '🇲🇽 México' }, { code: 'US', name: '🇺🇸 Estados Unidos' },
-        { code: 'AR', name: '🇦🇷 Argentina' },
+    const STEPS = ['Info General', 'Proxy / Red', 'Dispositivo', 'Resumen'];
+    const BOOKIES = ['Bet365', '1xBet', 'Betfair', 'Pinnacle', 'William Hill', 'Bwin', 'Unibet', 'Codere', 'Betway'];
+    const SPORTS = ['Fútbol', 'Tenis', 'Baloncesto', 'Béisbol', 'Hockey', 'Fórmula 1', 'eSports'];
+    const COUNTRIES = soaxCountries.length > 0 ? soaxCountries.map(c => ({
+        code: c.code.toUpperCase(),
+        name: c.name
+    })) : [
+        { code: 'EC', name: 'Ecuador' },
+        { code: 'CO', name: 'Colombia' }, { code: 'MX', name: 'México' },
+        { code: 'ES', name: 'España' },
+        { code: 'US', name: 'Estados Unidos' },
     ];
     const SCREENS_BY_DEVICE: Record<string, string[]> = {
         DESKTOP: ['1920x1080', '2560x1440', '1440x900', '1366x768'],
-        TABLET:  ['1280x800', '1024x768', '768x1024'],
-        MOBILE:  ['390x844', '414x896', '375x812', '360x780'],
+        TABLET: ['1280x800', '1024x768', '768x1024'],
+        MOBILE: ['390x844', '414x896', '375x812', '360x780'],
     };
 
     const fieldCls = 'w-full bg-[#080808] border border-white/10 rounded-xl p-3 text-sm text-white focus:border-[#00ff88] outline-none transition-colors';
@@ -1187,10 +1174,41 @@ export const CreateProfileModal = ({
                 language: form.language, auto_fingerprint: form.autoFingerprint,
                 open_on_create: form.openOnCreate,
             });
+            // ← RESET después de crear exitosamente
+            setStep(1);
+            setForm({
+                name: '', owner: '', bookie: 'Bet365', sport: 'Fútbol',
+                proxyType: 'RESIDENTIAL', country: 'ES', city: '', rotationMinutes: 30,
+                warmupUrls: 'https://www.google.com\nhttps://www.youtube.com',
+                deviceType: 'DESKTOP', os: 'Windows', screenRes: '1920x1080',
+                language: 'es-ES', autoFingerprint: true, openOnCreate: false,
+            });
         } finally {
             setSubmitting(false);
         }
     };
+
+    // Cargar países al abrir
+    React.useEffect(() => {
+        if (!isOpen) return;
+        fetch('/api/v1/proxies/soax/countries')
+            .then(r => r.json())
+            .then(d => setSoaxCountries(d.countries ?? []))
+            .catch(() => { });
+    }, [isOpen]);
+
+    // Cargar ciudades cuando cambia el país
+    React.useEffect(() => {
+        if (!form.country) return;
+        setLoadingCities(true);
+        setSoaxCities([]);
+        fetch(`/api/v1/proxies/soax/cities?country=${form.country.toLowerCase()}`)
+            .then(r => r.json())
+            .then(d => setSoaxCities(d.cities ?? []))
+            .catch(() => { })
+            .finally(() => setLoadingCities(false));
+    }, [form.country]);
+
 
     if (!isOpen) return null;
 
@@ -1204,12 +1222,11 @@ export const CreateProfileModal = ({
 
                 {/* Header */}
                 <div className="p-8 pb-4">
-                    <h3 className="text-2xl font-black text-white italic tracking-tighter mb-4">Nuevo Perfil</h3>
+                    <h3 className="text-2xl font-black text-white italic tracking-tighter mb-4">Nuevo Perfill</h3>
                     <div className="flex gap-2 mb-1">
                         {STEPS.map((_, i) => (
-                            <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                                step > i ? 'bg-[#00ff88]' : step === i + 1 ? 'bg-[#00ff88]/60' : 'bg-white/10'
-                            }`} />
+                            <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${step > i ? 'bg-[#00ff88]' : step === i + 1 ? 'bg-[#00ff88]/60' : 'bg-white/10'
+                                }`} />
                         ))}
                     </div>
                     <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mt-2">
@@ -1254,17 +1271,16 @@ export const CreateProfileModal = ({
                                 <div className="flex gap-2">
                                     {[
                                         { val: 'RESIDENTIAL', label: 'Residencial', desc: 'Mayor confianza' },
-                                        { val: 'MOBILE_4G',   label: 'Móvil 4G',   desc: 'Anti-detección' },
-                                        { val: 'DATACENTER',  label: 'Datacenter',  desc: 'Alta velocidad' },
+                                        { val: 'MOBILE_4G', label: 'Móvil 4G', desc: 'Anti-detección' },
+                                        { val: 'DATACENTER', label: 'Datacenter', desc: 'Alta velocidad' },
                                     ].map(t => (
                                         <button
                                             key={t.val}
                                             onClick={() => set('proxyType', t.val)}
-                                            className={`flex-1 p-3 rounded-xl border text-left transition-all ${
-                                                form.proxyType === t.val
+                                            className={`flex-1 p-3 rounded-xl border text-left transition-all ${form.proxyType === t.val
                                                     ? 'border-[#00ff88]/50 bg-[#00ff88]/5'
                                                     : 'border-white/10 bg-white/[0.02] hover:bg-white/5'
-                                            }`}
+                                                }`}
                                         >
                                             <p className={`text-xs font-black uppercase ${form.proxyType === t.val ? 'text-[#00ff88]' : 'text-white'}`}>{t.label}</p>
                                             <p className="text-[10px] text-[#555] mt-0.5">{t.desc}</p>
@@ -1280,8 +1296,15 @@ export const CreateProfileModal = ({
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className={labelCls}>Ciudad (opcional)</label>
-                                    <input className={fieldCls} placeholder="Ej: Madrid, Barcelona..." value={form.city} onChange={e => set('city', e.target.value)} />
+                                    <label className={labelCls}>
+                                        Ciudad (opcional) {loadingCities && <span className="text-[#00ff88] animate-pulse">— cargando...</span>}
+                                    </label>
+                                    <select className={fieldCls} value={form.city} onChange={e => set('city', e.target.value)}>
+                                        <option value="">Cualquier ciudad</option>
+                                        {soaxCities.map(c => (
+                                            <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
                             <div className="space-y-2">
@@ -1291,11 +1314,10 @@ export const CreateProfileModal = ({
                                         <button
                                             key={r.val}
                                             onClick={() => set('rotationMinutes', r.val)}
-                                            className={`px-4 py-2 rounded-lg border text-xs font-black uppercase transition-all ${
-                                                form.rotationMinutes === r.val
+                                            className={`px-4 py-2 rounded-lg border text-xs font-black uppercase transition-all ${form.rotationMinutes === r.val
                                                     ? 'border-[#00ff88]/50 bg-[#00ff88]/10 text-[#00ff88]'
                                                     : 'border-white/10 bg-white/[0.02] text-[#666] hover:text-white hover:bg-white/5'
-                                            }`}
+                                                }`}
                                         >
                                             {r.label}
                                         </button>
@@ -1322,22 +1344,21 @@ export const CreateProfileModal = ({
                                 <div className="flex gap-3">
                                     {[
                                         { val: 'DESKTOP', icon: '🖥️', label: 'Desktop' },
-                                        { val: 'TABLET',  icon: '📱', label: 'Tablet' },
-                                        { val: 'MOBILE',  icon: '📲', label: 'Mobile' },
+                                        { val: 'TABLET', icon: '📱', label: 'Tablet' },
+                                        { val: 'MOBILE', icon: '📲', label: 'Mobile' },
                                     ].map(d => (
                                         <button
                                             key={d.val}
                                             onClick={() => {
                                                 set('deviceType', d.val);
-                                                if (d.val === 'MOBILE')  { set('os', 'Android'); set('screenRes', '390x844'); }
-                                                if (d.val === 'TABLET')  { set('os', 'Android'); set('screenRes', '1280x800'); }
+                                                if (d.val === 'MOBILE') { set('os', 'Android'); set('screenRes', '390x844'); }
+                                                if (d.val === 'TABLET') { set('os', 'Android'); set('screenRes', '1280x800'); }
                                                 if (d.val === 'DESKTOP') { set('os', 'Windows'); set('screenRes', '1920x1080'); }
                                             }}
-                                            className={`flex-1 py-4 rounded-xl border text-center transition-all ${
-                                                form.deviceType === d.val
+                                            className={`flex-1 py-4 rounded-xl border text-center transition-all ${form.deviceType === d.val
                                                     ? 'border-[#00ff88]/50 bg-[#00ff88]/5'
                                                     : 'border-white/10 bg-white/[0.02] hover:bg-white/5'
-                                            }`}
+                                                }`}
                                         >
                                             <div className="text-2xl mb-1">{d.icon}</div>
                                             <p className={`text-xs font-black uppercase ${form.deviceType === d.val ? 'text-[#00ff88]' : 'text-[#888]'}`}>{d.label}</p>
@@ -1370,15 +1391,14 @@ export const CreateProfileModal = ({
                                 <label className={labelCls}>Opciones</label>
                                 {[
                                     { key: 'autoFingerprint', label: 'Huella digital automática', desc: 'Canvas, WebGL y AudioContext generados basados en la IP asignada' },
-                                    { key: 'openOnCreate',    label: 'Abrir navegador al crear',  desc: 'Lanza el navegador en la primera computadora disponible' },
+                                    { key: 'openOnCreate', label: 'Abrir navegador al crear', desc: 'Lanza el navegador en la primera computadora disponible' },
                                 ].map(opt => (
                                     <label key={opt.key} className="flex items-start gap-3 cursor-pointer group">
                                         <div
-                                            className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border flex-shrink-0 transition-all ${
-                                                (form as any)[opt.key]
+                                            className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border flex-shrink-0 transition-all ${(form as any)[opt.key]
                                                     ? 'bg-[#00ff88] border-[#00ff88]'
                                                     : 'border-white/20 bg-white/5 group-hover:border-white/40'
-                                            }`}
+                                                }`}
                                             onClick={() => set(opt.key, !(form as any)[opt.key])}
                                         >
                                             {(form as any)[opt.key] && (
@@ -1403,16 +1423,16 @@ export const CreateProfileModal = ({
                                 <p className="text-[10px] font-black text-[#00ff88] uppercase tracking-widest mb-3">Resumen de configuración</p>
                                 <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
                                     {[
-                                        ['Perfil',       form.name],
-                                        ['Propietario',  form.owner],
-                                        ['Bookie',       form.bookie],
-                                        ['Deporte',      form.sport],
-                                        ['Proxy',        form.proxyType.replace('_', ' ')],
+                                        ['Perfil', form.name],
+                                        ['Propietario', form.owner],
+                                        ['Bookie', form.bookie],
+                                        ['Deporte', form.sport],
+                                        ['Proxy', form.proxyType.replace('_', ' ')],
                                         ['País / Ciudad', `${form.country}${form.city ? ' / ' + form.city : ''}`],
-                                        ['Rotación IP',  form.rotationMinutes === 0 ? 'Manual' : `${form.rotationMinutes} min`],
-                                        ['Dispositivo',  `${form.deviceType} · ${form.os}`],
-                                        ['Resolución',   form.screenRes],
-                                        ['Idioma',       form.language],
+                                        ['Rotación IP', form.rotationMinutes === 0 ? 'Manual' : `${form.rotationMinutes} min`],
+                                        ['Dispositivo', `${form.deviceType} · ${form.os}`],
+                                        ['Resolución', form.screenRes],
+                                        ['Idioma', form.language],
                                         ['URLs warm-up', `${form.warmupUrls.split('\n').filter(Boolean).length} URL(s)`],
                                     ].map(([k, v]) => (
                                         <div key={k} className="flex justify-between border-b border-white/5 py-1">
@@ -1444,9 +1464,8 @@ export const CreateProfileModal = ({
                         <button
                             onClick={() => setStep(s => s + 1)}
                             disabled={!canNext()}
-                            className={`px-8 py-3 font-black uppercase rounded-xl text-xs transition-all flex items-center gap-2 ${
-                                canNext() ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white/5 text-[#444] cursor-not-allowed'
-                            }`}
+                            className={`px-8 py-3 font-black uppercase rounded-xl text-xs transition-all flex items-center gap-2 ${canNext() ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-white/5 text-[#444] cursor-not-allowed'
+                                }`}
                         >
                             Siguiente <ChevronRight size={14} />
                         </button>
@@ -1466,50 +1485,162 @@ export const CreateProfileModal = ({
 };
 
 // ─── SYSTEM DIAGNOSTIC MODAL ─────────────────────────────────────────────────
-
-export const SystemDiagnosticModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+export const SystemDiagnosticModal = ({
+    isOpen, onClose, services = [], healthDetails,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    services?: import('../types/orchestratorTypes').ServiceStatus[];
+    healthDetails?: import('../types/orchestratorTypes').HealthDetails;
+}) => {
     if (!isOpen) return null;
+    const f = healthDetails?.factors;
 
-    const services = [
-        { name: 'Base de Datos',   latency: '2ms' },
-        { name: 'API Gateway',     latency: '45ms' },
-        { name: 'Proxy Manager',   latency: '120ms' },
-        { name: 'Node Controller', latency: '15ms' },
-    ];
+    // Mapa de íconos por nombre de servicio
+    const serviceIcon = (name: string) => {
+        const n = name.toLowerCase();
+        if (n.includes('database') || n.includes('db')) return <Server size={16} />;
+        if (n.includes('redis')) return <Activity size={16} />;
+        if (n.includes('proxy') || n.includes('soax')) return <RefreshCw size={16} />;
+        if (n.includes('agent')) return <CheckCircle2 size={16} />;
+        if (n.includes('ads')) return <Activity size={16} />;
+        return <Info size={16} />;
+    };
+
+    const allOk = services.every(s => s.status === 'ONLINE');
+    const degraded = services.filter(s => s.status !== 'ONLINE' && s.status !== 'UNKNOWN').length;
+    const overallMsg = allOk
+        ? 'Todos los servicios responden correctamente.'
+        : `${degraded} servicio(s) con problemas — revisar conexiones.`;
+
+    const factors = healthDetails ? [
+        {
+            label: 'Disponibilidad de Nodos',
+            value: f ? `${f.nodesOnline}/${f.nodesTotal}` : '—',
+            score: healthDetails.nodeScore,
+        },
+        {
+            label: 'Éxito de Proxies SOAX',
+            value: f ? `${Math.round(f.proxySuccessRate)}%` : '—',
+            score: healthDetails.proxyScore,
+        },
+        {
+            label: 'Gestión de Alertas',
+            value: f ? `${f.criticalAlerts} críticas` : '—',
+            score: healthDetails.alertScore,
+        },
+        {
+            label: 'Estado AdsPower',
+            value: f ? (f.adspowerHealthy ? 'Operativo' : 'Offline') : '—',
+            score: healthDetails.adspowerScore,
+        },
+        {
+            label: 'Base de Datos + Redis',
+            value: f ? `DB ${f.dbHealthy ? '✓' : '✗'} · Redis ${f.redisHealthy ? '✓' : '✗'}` : '—',
+            score: healthDetails.infraScore,
+        },
+    ] : [];
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-            <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[110] p-6 shadow-2xl animate-fade-in-up">
+            <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[110] p-6 shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto custom-scrollbar">
                 <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white"><X size={20} /></button>
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="p-3 bg-[#00ff88]/10 text-[#00ff88] rounded-xl"><Activity size={24} /></div>
+
+                <div className="flex items-center gap-4 mb-5">
+                    <div className={`p-3 rounded-xl ${allOk ? 'bg-[#00ff88]/10 text-[#00ff88]' : 'bg-amber-500/10 text-amber-500'}`}>
+                        <Activity size={24} />
+                    </div>
                     <div>
                         <h3 className="text-xl font-black text-white italic tracking-tighter">Diagnóstico de Sistema</h3>
-                        <p className="text-xs text-[#666]">Estado detallado de la infraestructura</p>
+                        <p className="text-xs text-[#666]">Estado en tiempo real — {new Date().toLocaleTimeString()}</p>
                     </div>
                 </div>
-                <div className="space-y-3 mb-6">
-                    {services.map((svc, i) => (
-                        <div key={i} className="flex justify-between items-center p-4 bg-white/5 border border-white/5 rounded-xl">
-                            <div className="flex items-center gap-3">
-                                <div className="size-2 rounded-full bg-[#00ff88] animate-pulse" />
-                                <span className="text-sm font-bold text-white">{svc.name}</span>
+
+                {/* SERVICIOS REALES */}
+                <div className="space-y-2 mb-5">
+                    <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-2">Servicios</p>
+                    {services.length === 0 ? (
+                        ['Database', 'Redis', 'Proxies', 'Agents', 'AdsPower', 'SOAX'].map(name => (
+                            <div key={name} className="flex justify-between items-center p-3 bg-white/5 border border-white/5 rounded-xl animate-pulse">
+                                <div className="flex items-center gap-3">
+                                    <div className="size-2 rounded-full bg-white/20" />
+                                    <span className="text-sm font-bold text-[#555]">{name}</span>
+                                </div>
+                                <div className="h-3 w-16 bg-white/10 rounded" />
                             </div>
-                            <div className="text-right">
-                                <span className="block text-xs font-black text-[#00ff88]">OPERATIVO</span>
-                                <span className="text-[10px] text-[#666] font-mono">{svc.latency}</span>
+                        ))
+                    ) : services.map((svc, i) => {
+                        const isOnline = svc.status === 'ONLINE';
+                        const isUnknown = svc.status === 'UNKNOWN' || !svc.status;
+                        return (
+                            <div key={i} className={`flex justify-between items-center p-3 border rounded-xl ${isOnline ? 'bg-[#00ff88]/[0.03] border-[#00ff88]/10' : isUnknown ? 'bg-white/5 border-white/5' : 'bg-red-500/[0.03] border-red-500/10'}`}>
+                                <div className="flex items-center gap-3">
+                                    <div className={`size-2 rounded-full ${isOnline ? 'bg-[#00ff88] animate-pulse' : isUnknown ? 'bg-white/20' : 'bg-red-500'}`} />
+                                    <span className="text-sm font-bold text-white">{svc.name}</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className={`block text-[10px] font-black uppercase ${isOnline ? 'text-[#00ff88]' : isUnknown ? 'text-[#444]' : 'text-red-400'}`}>
+                                        {isUnknown ? 'MIDIENDO...' : svc.status}
+                                    </span>
+                                    {svc.latency > 0 && (
+                                        <span className={`text-[9px] font-mono ${svc.latency < 100 ? 'text-[#00ff88]/60' : svc.latency < 400 ? 'text-amber-500/60' : 'text-red-400/60'}`}>
+                                            {svc.latency}ms
+                                        </span>
+                                    )}
+                                </div>
                             </div>
+                        );
+                    })}
+                </div>
+
+                {/* HEALTH FACTORS */}
+                {factors.length > 0 && (
+                    <div className="mb-5">
+                        <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-2">Factores de Salud</p>
+                        <div className="space-y-2">
+                            {factors.map(fac => (
+                                <div key={fac.label} className="flex items-center gap-3 p-2.5 bg-white/[0.02] border border-white/5 rounded-lg">
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-[10px] font-bold text-[#999]">{fac.label}</span>
+                                            <span className="text-[10px] font-mono text-[#666]">{fac.value}</span>
+                                        </div>
+                                        <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full rounded-full transition-all duration-700"
+                                                style={{
+                                                    width: `${fac.score}%`,
+                                                    background: fac.score > 80 ? '#00ff88' : fac.score > 50 ? '#f59e0b' : '#ef4444'
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <span className={`text-[10px] font-black w-8 text-right ${fac.score > 80 ? 'text-[#00ff88]' : fac.score > 50 ? 'text-amber-500' : 'text-red-400'}`}>
+                                        {fac.score}%
+                                    </span>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
-                <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl mb-6 flex gap-3">
-                    <Info size={16} className="text-blue-500 shrink-0 mt-0.5" />
+                    </div>
+                )}
+
+                {/* ESTADO GENERAL */}
+                <div className={`p-3 rounded-xl mb-5 flex gap-3 ${allOk ? 'bg-[#00ff88]/5 border border-[#00ff88]/20' : 'bg-amber-500/5 border border-amber-500/20'}`}>
+                    <Info size={16} className={allOk ? 'text-[#00ff88] shrink-0 mt-0.5' : 'text-amber-500 shrink-0 mt-0.5'} />
                     <div>
-                        <p className="text-xs font-bold text-blue-500">Todo parece correcto</p>
-                        <p className="text-[10px] text-[#888] mt-1">El sistema responde dentro de los parámetros normales.</p>
+                        <p className={`text-xs font-bold ${allOk ? 'text-[#00ff88]' : 'text-amber-500'}`}>
+                            {allOk ? 'Todo parece correcto' : 'Atención requerida'}
+                        </p>
+                        <p className="text-[10px] text-[#888] mt-1">{overallMsg}</p>
+                        {f && f.activeSessions > 0 && (
+                            <p className="text-[10px] text-[#666] mt-1">
+                                {f.activeSessions} sesion(es) de browser activas en este momento.
+                            </p>
+                        )}
                     </div>
                 </div>
+
                 <div className="flex gap-3">
                     <button className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl border border-white/5 text-xs uppercase transition-colors">
                         Ver Logs
@@ -1522,7 +1653,6 @@ export const SystemDiagnosticModal = ({ isOpen, onClose }: { isOpen: boolean; on
         </div>
     );
 };
-
 // ─── RESOURCE DETAIL MODAL ───────────────────────────────────────────────────
 
 export const ResourceDetailModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
@@ -1542,9 +1672,9 @@ export const ResourceDetailModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
                 </div>
                 <div className="grid grid-cols-3 gap-3 mb-6">
                     {[
-                        { label: 'CPU Total', value: '42%',    color: 'text-[#00ff88]' },
-                        { label: 'RAM Uso',   value: '12GB',   color: 'text-blue-500' },
-                        { label: 'Red',       value: '45mbps', color: 'text-amber-500' },
+                        { label: 'CPU Total', value: '42%', color: 'text-[#00ff88]' },
+                        { label: 'RAM Uso', value: '12GB', color: 'text-blue-500' },
+                        { label: 'Red', value: '45mbps', color: 'text-amber-500' },
                     ].map(m => (
                         <div key={m.label} className="p-4 bg-[#0a0a0a] border border-white/5 rounded-xl text-center">
                             <p className="text-[10px] font-bold text-[#666] uppercase mb-1">{m.label}</p>
@@ -1555,9 +1685,9 @@ export const ResourceDetailModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
                 <h4 className="text-[10px] font-black text-[#666] uppercase mb-3">Mayores Consumidores</h4>
                 <div className="space-y-2 mb-6">
                     {[
-                        { name: 'Node-01 (Main)',       value: '85% CPU', color: 'text-red-500' },
-                        { name: 'Node-04 (Incubator)',  value: '60% CPU', color: 'text-amber-500' },
-                        { name: 'DB Server',            value: '15% CPU', color: 'text-[#00ff88]' },
+                        { name: 'Node-01 (Main)', value: '85% CPU', color: 'text-red-500' },
+                        { name: 'Node-04 (Incubator)', value: '60% CPU', color: 'text-amber-500' },
+                        { name: 'DB Server', value: '15% CPU', color: 'text-[#00ff88]' },
                     ].map(item => (
                         <div key={item.name} className="flex justify-between items-center p-2 border-b border-white/5 text-xs text-[#ccc]">
                             <span>{item.name}</span>
@@ -1575,7 +1705,14 @@ export const ResourceDetailModal = ({ isOpen, onClose }: { isOpen: boolean; onCl
 
 // ─── JOB QUEUE MODAL ─────────────────────────────────────────────────────────
 
-export const JobQueueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+export const JobQueueModal = ({ isOpen, onClose, queue = 0, running = 0, failed = 0, pendingProfiles = [] }: {
+    isOpen: boolean;
+    onClose: () => void;
+    queue?: number;
+    running?: number;
+    failed?: number;
+    pendingProfiles?: any[];
+}) => {
     if (!isOpen) return null;
 
     return (
@@ -1592,9 +1729,9 @@ export const JobQueueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
                 </div>
                 <div className="flex gap-4 mb-6">
                     {[
-                        { val: '1', label: 'En Espera',   cls: 'bg-white/5 border-white/5 text-white' },
-                        { val: '8', label: 'Procesando',  cls: 'bg-[#00ff88]/10 border-[#00ff88]/20 text-[#00ff88]' },
-                        { val: '0', label: 'Fallidas',    cls: 'bg-red-500/10 border-red-500/20 text-red-500' },
+                        { val: queue.toString(), label: 'En Espera', cls: 'bg-white/5 border-white/5 text-white' },
+                        { val: running.toString(), label: 'Procesando', cls: 'bg-[#00ff88]/10 border-[#00ff88]/20 text-[#00ff88]' },
+                        { val: failed.toString(), label: 'Falladas', cls: 'bg-red-500/10 border-red-500/20 text-red-500' },
                     ].map(item => (
                         <div key={item.label} className={`flex-1 p-4 border rounded-xl text-center ${item.cls}`}>
                             <span className="block text-2xl font-black">{item.val}</span>
@@ -1604,12 +1741,14 @@ export const JobQueueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
                 </div>
                 <div className="bg-[#0a0a0a] border border-white/5 rounded-xl p-4 mb-6 h-40 overflow-y-auto custom-scrollbar space-y-2">
                     <p className="text-[10px] font-bold text-[#444] uppercase mb-2">Próximas Tareas</p>
-                    {[{ name: 'Sync Odds #2912' }, { name: 'Health Check #991' }].map(t => (
-                        <div key={t.name} className="flex justify-between items-center text-xs text-[#ccc] p-2 bg-white/5 rounded">
-                            <span>{t.name}</span>
-                            <span className="text-[10px] text-[#666]">Pendiente</span>
+                    {pendingProfiles.length > 0 ? pendingProfiles.map((p: any) => (
+                        <div key={p.id} className="flex justify-between items-center text-xs text-[#ccc] p-2 bg-white/5 rounded">
+                            <span>{p.name}</span>
+                            <span className="text-[10px] text-amber-500">⏳ En cola</span>
                         </div>
-                    ))}
+                    )) : (
+                        <div className="p-4 text-center text-[#444] text-xs">Sin tareas pendientes</div>
+                    )}
                 </div>
                 <div className="flex gap-3">
                     <button className="flex-1 py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 font-bold rounded-xl border border-amber-500/20 text-xs uppercase transition-colors">
@@ -1629,14 +1768,14 @@ export const JobQueueModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
 
 export const ProxyHistoryModal = ({
     conn,
-    logs    = [],
+    logs = [],
     loading = false,
     onClose,
 }: {
-    conn:     ConnectionItem | null;
-    logs?:    any[];
+    conn: ConnectionItem | null;
+    logs?: any[];
     loading?: boolean;
-    onClose:  () => void;
+    onClose: () => void;
 }) => {
     if (!conn) return null;
 
@@ -1676,9 +1815,8 @@ export const ProxyHistoryModal = ({
                         <div className="border border-white/5 rounded-xl overflow-hidden">
                             {logs.map((log, i) => (
                                 <div key={log.id ?? i} className="flex items-start gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
-                                    <div className={`shrink-0 size-7 rounded-lg flex items-center justify-center mt-0.5 ${
-                                        log.success ? 'bg-blue-500/10 text-blue-400' : 'bg-red-500/10 text-red-400'
-                                    }`}>
+                                    <div className={`shrink-0 size-7 rounded-lg flex items-center justify-center mt-0.5 ${log.success ? 'bg-blue-500/10 text-blue-400' : 'bg-red-500/10 text-red-400'
+                                        }`}>
                                         {log.success ? <RefreshCw size={12} /> : <AlertTriangle size={12} />}
                                     </div>
                                     <div className="flex-1">

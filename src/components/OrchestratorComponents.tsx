@@ -229,9 +229,24 @@ export const AlertItem = ({ alert, onRead, onAction }: { alert: Alert, onRead: (
 
 // --- NEW COMPONENTS ---
 
-export const GlobalStatusHero = ({ status, lastUpdate, autoRefresh, onToggleAuto, onClick }: any) => {
+export const GlobalStatusHero = ({
+    status, lastUpdate, autoRefresh, onToggleAuto, onClick, verdict,
+}: {
+    status: string;
+    lastUpdate: string;
+    autoRefresh: boolean;
+    onToggleAuto: () => void;
+    onClick: () => void;
+    verdict?: string;
+}) => {
     const isOk = status === 'OK';
     const isCrit = status === 'CRITICAL';
+
+    const defaultVerdict = isOk
+        ? '"Todos los servicios operativos. Latencia estable."'
+        : isCrit
+            ? '"Estado crítico — intervención requerida."'
+            : '"Degradación detectada — revisa proxies y agentes."';
 
     return (
         <div onClick={onClick} className="w-full bg-[#0a0a0a] border border-white/5 rounded-2xl p-6 relative overflow-hidden flex justify-between items-center group cursor-pointer hover:border-white/10 transition-colors">
@@ -239,33 +254,44 @@ export const GlobalStatusHero = ({ status, lastUpdate, autoRefresh, onToggleAuto
             <div className="absolute inset-0 bg-gradient-to-r from-black via-transparent to-transparent opacity-50" />
 
             <div className="relative z-10 flex items-center gap-6">
-                <div className={`size-16 rounded-2xl flex items-center justify-center text-4xl shadow-xl transition-transform group-hover:scale-110 ${isOk ? 'bg-[#00ff88]/10 text-[#00ff88]' : isCrit ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                <div className={`size-16 rounded-2xl flex items-center justify-center shadow-xl transition-transform group-hover:scale-110 ${isOk ? 'bg-[#00ff88]/10 text-[#00ff88]' : isCrit ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>
                     {isOk ? <CheckCircle2 size={40} /> : <AlertTriangle size={40} />}
                 </div>
                 <div>
                     <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase flex items-center gap-3">
                         SISTEMA {status}
-                        {isOk && <span className="text-xs not-italic bg-[#00ff88]/20 text-[#00ff88] px-2 py-0.5 rounded font-bold tracking-normal group-hover:bg-[#00ff88] group-hover:text-black transition-colors">OPERATIVO 100%</span>}
+                        {isOk && (
+                            <span className="text-xs not-italic bg-[#00ff88]/20 text-[#00ff88] px-2 py-0.5 rounded font-bold tracking-normal group-hover:bg-[#00ff88] group-hover:text-black transition-colors">
+                                OPERATIVO 100%
+                            </span>
+                        )}
                     </h2>
                     <div className="flex items-center gap-3 mt-1">
                         <p className="text-xs text-[#666] font-mono flex items-center gap-1 group-hover:text-[#888] transition-colors">
                             <Clock size={12} /> Actualizado hace {lastUpdate}
                         </p>
-                        <button onClick={(e) => { e.stopPropagation(); onToggleAuto(); }} className={`flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded transition-colors border ${autoRefresh ? 'bg-[#00ff88]/10 border-[#00ff88]/30 text-[#00ff88] hover:bg-[#00ff88] hover:text-black' : 'bg-white/5 border-white/5 text-[#666] hover:text-white'}`}>
-                            <RefreshCw size={10} className={autoRefresh ? 'animate-spin' : ''} /> {autoRefresh ? 'Auto Sync ON' : 'Manual'}
+                        <button
+                            onClick={e => { e.stopPropagation(); onToggleAuto(); }}
+                            className={`flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded transition-colors border ${autoRefresh ? 'bg-[#00ff88]/10 border-[#00ff88]/30 text-[#00ff88] hover:bg-[#00ff88] hover:text-black' : 'bg-white/5 border-white/5 text-[#666] hover:text-white'}`}
+                        >
+                            <RefreshCw size={10} className={autoRefresh ? 'animate-spin' : ''} />
+                            {autoRefresh ? 'Auto Sync ON' : 'Manual'}
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div className="relative z-10 hidden md:block text-right opacity-80 group-hover:opacity-100 transition-opacity">
-                <p className="text-[10px] font-bold text-[#444] uppercase tracking-widest mb-1 group-hover:text-[#00ff88] transition-colors">Veredicto del Sistema</p>
-                <p className="text-sm text-[#888] italic">"Todos los nodos operativos. Latencia estable."</p>
+            <div className="relative z-10 hidden md:block text-right opacity-80 group-hover:opacity-100 transition-opacity max-w-[260px]">
+                <p className="text-[10px] font-bold text-[#444] uppercase tracking-widest mb-1 group-hover:text-[#00ff88] transition-colors">
+                    Veredicto del Sistema
+                </p>
+                <p className="text-sm text-[#888] italic leading-snug">
+                    {verdict ?? defaultVerdict}
+                </p>
             </div>
         </div>
     );
 };
-
 export const MiniCapacityPanel = ({ cpu, ram, net, onClick }: any) => (
     <div onClick={onClick} className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-4 flex flex-col justify-center h-full cursor-pointer hover:bg-white/5 transition-colors group">
         <h3 className="text-[10px] font-black text-[#666] uppercase tracking-[0.2em] mb-3 flex items-center justify-between group-hover:text-white transition-colors">
@@ -316,71 +342,143 @@ export const JobsQueueWidget = ({ queue, running, failed, onClick }: any) => (
 );
 
 // --- HEALTH OVERVIEW ---
-export const HealthOverview = ({ score, risks, onDetails }: { score: number, risks: any[], onDetails?: () => void }) => (
-    <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6 h-full flex flex-col relative overflow-hidden group/card">
-        <div className="flex justify-between items-center mb-4">
-            <h3 className="text-[10px] font-black text-[#666] uppercase tracking-[0.3em] flex items-center gap-2">
-                <Activity size={14} className="text-[#00ff88]" /> Salud General
-            </h3>
-            <div className="relative group cursor-help">
-                <Info size={12} className="text-[#444] hover:text-[#ccc]" />
-                <div className="absolute right-0 top-full mt-2 w-48 p-3 bg-black border border-white/10 rounded-lg z-50 hidden group-hover:block shadow-xl">
-                    <p className="text-[10px] text-[#ccc] leading-relaxed">
-                        Indica qué tan estable está el sistema.
-                        <br /><span className="text-[#00ff88]">Verde:</span> Óptimo
-                        <br /><span className="text-amber-500">Amarillo:</span> Revisar
-                        <br /><span className="text-red-500">Rojo:</span> Crítico
-                    </p>
-                </div>
-            </div>
-        </div>
+export const HealthOverview = ({
+    score, risks, healthDetails, onDetails,
+}: {
+    score: number;
+    risks: string[];
+    healthDetails?: import('../types/orchestratorTypes').HealthDetails;
+    onDetails?: () => void;
+}) => {
+    const f = healthDetails?.factors;
 
-        <div className="flex items-center gap-6 mb-6">
-            <div className="relative size-24 flex items-center justify-center shrink-0">
-                <svg className="size-full -rotate-90" viewBox="0 0 36 36">
-                    <path className="text-white/5" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
-                    <path className={`${score > 80 ? 'text-[#00ff88]' : score > 50 ? 'text-amber-500' : 'text-red-500'}`} strokeDasharray={`${score}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
-                </svg>
-                <span className="absolute text-2xl font-black text-white">{score}%</span>
-            </div>
-            <div className="flex-1 space-y-2">
-                <div className="flex justify-between text-xs font-bold text-[#ccc] border-b border-white/5 pb-1">
-                    <span>Tiempo respuesta</span>
-                    <span className="text-[#00ff88]">45ms</span>
-                </div>
-                <div className="flex justify-between text-xs font-bold text-[#ccc] border-b border-white/5 pb-1">
-                    <span>Errores</span>
-                    <span className="text-green-500">0.02%</span>
-                </div>
-                <div className="flex justify-between text-xs font-bold text-[#ccc]">
-                    <span>Tiempo funcionando</span>
-                    <span className="text-[#00ff88]">99.9%</span>
-                </div>
-            </div>
-        </div>
+    const factors = healthDetails ? [
+        {
+            label: 'Nodos',
+            score: healthDetails.nodeScore,
+            detail: f ? `${f.nodesOnline}/${f.nodesTotal} online` : '—',
+            color: healthDetails.nodeScore > 80 ? '#00ff88' : healthDetails.nodeScore > 50 ? '#f59e0b' : '#ef4444',
+        },
+        {
+            label: 'Proxies SOAX',
+            score: healthDetails.proxyScore,
+            detail: f ? `${Math.round(f.proxySuccessRate)}% éxito · ${f.avgProxyLatency}ms` : '—',
+            color: healthDetails.proxyScore > 80 ? '#00ff88' : healthDetails.proxyScore > 50 ? '#f59e0b' : '#ef4444',
+        },
+        {
+            label: 'Alertas',
+            score: healthDetails.alertScore,
+            detail: f ? `${f.criticalAlerts} críticas · ${f.warningAlerts} warns` : '—',
+            color: healthDetails.alertScore > 80 ? '#00ff88' : healthDetails.alertScore > 50 ? '#f59e0b' : '#ef4444',
+        },
+        {
+            label: 'AdsPower',
+            score: healthDetails.adspowerScore,
+            detail: f ? (f.adspowerHealthy ? 'Operativo' : 'Sin conexión') : '—',
+            color: healthDetails.adspowerScore === 100 ? '#00ff88' : '#ef4444',
+        },
+        {
+            label: 'Infraestructura',
+            score: healthDetails.infraScore,
+            detail: f ? `DB ${f.dbHealthy ? '✓' : '✗'} · Redis ${f.redisHealthy ? '✓' : '✗'}` : '—',
+            color: healthDetails.infraScore > 80 ? '#00ff88' : healthDetails.infraScore > 50 ? '#f59e0b' : '#ef4444',
+        },
+    ] : [];
 
-        <div className="flex-1 overflow-auto custom-scrollbar mb-4">
-            <p className="text-[9px] font-black text-[#666] uppercase mb-2">Riesgos detectados</p>
-            {risks.length === 0 ? (
-                <p className="text-[10px] text-[#444] italic">Todo sistema nominal</p>
-            ) : (
-                risks.map((risk, i) => (
-                    <div key={i} className="flex items-center gap-2 mb-2 bg-white/5 p-2 rounded text-[10px] border border-white/5 group hover:border-white/20 transition-colors cursor-default">
-                        <AlertTriangle size={12} className="text-amber-500 shrink-0" />
-                        <div className="flex-1 overflow-hidden">
-                            <span className="text-[#ccc] block truncate">{risk}</span>
-                            <span className="text-[8px] text-[#555] lowercase">hace 5 min • rendimiento</span>
-                        </div>
+    return (
+        <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6 h-full flex flex-col relative overflow-hidden group/card">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-[10px] font-black text-[#666] uppercase tracking-[0.3em] flex items-center gap-2">
+                    <Activity size={14} className="text-[#00ff88]" /> Salud General
+                </h3>
+                <div className="relative group cursor-help">
+                    <Info size={12} className="text-[#444] hover:text-[#ccc]" />
+                    <div className="absolute right-0 top-full mt-2 w-52 p-3 bg-black border border-white/10 rounded-lg z-50 hidden group-hover:block shadow-xl">
+                        <p className="text-[10px] text-[#ccc] leading-relaxed font-bold mb-1">5 factores ponderados:</p>
+                        <p className="text-[9px] text-[#888] space-y-0.5">
+                            Nodos 30% · Proxies 25%<br />
+                            Alertas 20% · AdsPower 15%<br />
+                            Infraestructura 10%
+                        </p>
                     </div>
-                ))
-            )}
-        </div>
+                </div>
+            </div>
 
-        <button onClick={onDetails} className="w-full py-2 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase rounded text-white border border-white/5 transition-colors flex items-center justify-center gap-2 group-hover/card:bg-[#00ff88]/10 group-hover/card:text-[#00ff88] group-hover/card:border-[#00ff88]/30">
-            Ver Detalles <MoreHorizontal size={12} />
-        </button>
-    </div>
-);
+            {/* Score circle */}
+            <div className="flex items-center gap-5 mb-5">
+                <div className="relative size-20 flex items-center justify-center shrink-0">
+                    <svg className="size-full -rotate-90" viewBox="0 0 36 36">
+                        <path className="text-white/5"
+                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            fill="none" stroke="currentColor" strokeWidth="3" />
+                        <path
+                            className={score > 80 ? 'text-[#00ff88]' : score > 50 ? 'text-amber-500' : 'text-red-500'}
+                            strokeDasharray={`${score}, 100`}
+                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            fill="none" stroke="currentColor" strokeWidth="3"
+                            strokeLinecap="round"
+                        />
+                    </svg>
+                    <span className="absolute text-xl font-black text-white">{score}%</span>
+                </div>
+
+                <div className="flex-1 space-y-1.5">
+                    {factors.length > 0 ? factors.map(f => (
+                        <div key={f.label}>
+                            <div className="flex justify-between items-center mb-0.5">
+                                <span className="text-[9px] font-bold text-[#666] uppercase">{f.label}</span>
+                                <span className="text-[9px] font-black" style={{ color: f.color }}>{f.score}%</span>
+                            </div>
+                            <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full rounded-full transition-all duration-700"
+                                    style={{ width: `${f.score}%`, background: f.color }}
+                                />
+                            </div>
+                        </div>
+                    )) : (
+                        // Fallback si no hay healthDetails (cargando)
+                        ['Nodos', 'Proxies', 'Alertas', 'AdsPower', 'Infraestructura'].map(l => (
+                            <div key={l} className="h-3 bg-white/5 rounded animate-pulse" />
+                        ))
+                    )}
+                </div>
+            </div>
+
+            {/* Factors detail */}
+            {factors.length > 0 && (
+                <div className="mb-3 grid grid-cols-1 gap-1">
+                    {factors.map(f => (
+                        <div key={f.label} className="flex justify-between items-center text-[9px] border-b border-white/[0.04] py-0.5">
+                            <span className="text-[#555]">{f.label}</span>
+                            <span className="text-[#888] font-mono">{f.detail}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Risks */}
+            <div className="flex-1 overflow-auto custom-scrollbar mb-3">
+                <p className="text-[9px] font-black text-[#555] uppercase mb-1.5">Riesgos detectados</p>
+                {risks.length === 0 ? (
+                    <p className="text-[10px] text-[#444] italic">Todo sistema nominal ✓</p>
+                ) : risks.map((risk, i) => (
+                    <div key={i} className="flex items-start gap-2 mb-1.5 bg-white/5 px-2 py-1.5 rounded text-[9px] border border-white/5 hover:border-white/15 transition-colors">
+                        <AlertTriangle size={10} className="text-amber-500 shrink-0 mt-0.5" />
+                        <span className="text-[#bbb] leading-tight">{risk}</span>
+                    </div>
+                ))}
+            </div>
+
+            <button
+                onClick={onDetails}
+                className="w-full py-2 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase rounded text-white border border-white/5 transition-colors flex items-center justify-center gap-2 group-hover/card:bg-[#00ff88]/10 group-hover/card:text-[#00ff88] group-hover/card:border-[#00ff88]/30"
+            >
+                Ver Diagnóstico Completo <MoreHorizontal size={12} />
+            </button>
+        </div>
+    );
+};
 
 // --- ACTIVITY FEED ---
 
@@ -457,20 +555,64 @@ export const SystemEventsFeed = ({ events, onEventClick }: { events: SystemEvent
     </div>
 );
 // --- SERVICE STATUS BAR ---
-export const ServiceStatusBar = ({ services, onServiceClick }: { services: ServiceStatus[], onServiceClick: (svc: ServiceStatus) => void }) => (
-    <div className="flex flex-wrap gap-2">
-        {services.map((svc, i) => (
-            <button
-                key={i}
-                onClick={() => onServiceClick(svc)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-wider hover:bg-white/5 transition-colors ${svc.status === 'ONLINE' ? 'bg-[#00ff88]/10 border-[#00ff88]/20 text-[#00ff88]' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}
-            >
-                <div className={`size-1.5 rounded-full ${svc.status === 'ONLINE' ? 'bg-[#00ff88] animate-pulse' : 'bg-red-500'}`} />
-                {svc.name} <span className="text-white/30 ml-1 font-mono">{svc.latency}ms</span>
-            </button>
-        ))}
-    </div>
-);
+
+const EXPECTED_SERVICES = [
+    { name: 'Database', status: 'UNKNOWN', latency: 0 },
+    { name: 'Redis', status: 'UNKNOWN', latency: 0 },
+    { name: 'Proxies', status: 'UNKNOWN', latency: 0 },
+    { name: 'Agents', status: 'UNKNOWN', latency: 0 },
+    { name: 'AdsPower', status: 'UNKNOWN', latency: 0 },
+    { name: 'SOAX', status: 'UNKNOWN', latency: 0 },
+];
+
+function mergeServices(live: ServiceStatus[]): ServiceStatus[] {
+    return EXPECTED_SERVICES.map((base) => {
+        const found = live.find(
+            (s) => s.name.toLowerCase() === base.name.toLowerCase(),
+        );
+        return found ?? base;
+    });
+}
+export const ServiceStatusBar = ({ services = [], onServiceClick }: { services: ServiceStatus[], onServiceClick: (svc: ServiceStatus) => void }) => {
+    const merged = mergeServices(services);
+
+    return (
+        <div className="flex flex-wrap gap-2">
+            {merged.map((svc) => {
+                const isOnline = svc.status === 'ONLINE';
+                const isUnknown = svc.status === 'UNKNOWN';
+
+                const ringClass = isOnline
+                    ? 'bg-[#00ff88]/10 border-[#00ff88]/30 text-[#00ff88]'
+                    : isUnknown
+                        ? 'bg-white/5 border-white/10 text-white/30'
+                        : 'bg-red-500/10 border-red-500/20 text-red-400';
+
+                const dotClass = isOnline
+                    ? 'bg-[#00ff88] animate-pulse'
+                    : isUnknown
+                        ? 'bg-white/20'
+                        : 'bg-red-500';
+
+                return (
+                    <button
+                        key={svc.name}
+                        onClick={() => onServiceClick(svc)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-wider hover:bg-white/5 transition-colors ${ringClass}`}
+                    >
+                        <div className={`size-1.5 rounded-full ${dotClass}`} />
+                        {svc.name}
+                        {!isUnknown && (
+                            <span className="text-white/30 ml-1 font-mono">
+                                {svc.latency > 0 ? `${svc.latency}ms` : '—'}
+                            </span>
+                        )}
+                    </button>
+                );
+            })}
+        </div>
+    );
+};
 
 // --- JOB ROW ---
 export const JobRow = ({ job, onClick }: { job: import('../types/orchestratorTypes').Job, onClick: () => void }) => {

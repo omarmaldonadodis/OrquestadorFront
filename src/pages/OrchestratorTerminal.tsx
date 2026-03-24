@@ -31,14 +31,28 @@ import {
 } from '@/components/OrchestratorDrawers';
 
 // ─── HELPER (fuera del componente) ──────────────────────────────────────────
+// Añadir función helper cerca de getInitialTab:
+function computeVerdict(score: number, risks: string[], services: ServiceStatus[]): string {
+    const degradedSvcs = services.filter(s => s.status === 'DEGRADED').map(s => s.name);
+    if (score >= 90) return '"Sistema operando nominalmente. Todos los servicios en línea."';
+    if (score >= 75) {
+        const issue = risks[0] ?? 'advertencias menores detectadas';
+        return `"Operación estable con avisos: ${issue.toLowerCase()}"`;
+    }
+    if (score >= 55) {
+        const down = degradedSvcs.slice(0, 2).join(', ');
+        return `"Degradación detectada${down ? ` en ${down}` : ''}. Revisar proxies y agentes."`;
+    }
+    return '"Estado crítico — múltiples servicios afectados. Intervención requerida."';
+}
 
 function formatUptime(ms: number): string {
-    const s    = Math.floor(ms / 1000);
+    const s = Math.floor(ms / 1000);
     const days = Math.floor(s / 86400);
-    const hrs  = Math.floor((s % 86400) / 3600);
+    const hrs = Math.floor((s % 86400) / 3600);
     const mins = Math.floor((s % 3600) / 60);
     if (days > 0) return `${days}d ${hrs}h`;
-    if (hrs  > 0) return `${hrs}h ${mins}m`;
+    if (hrs > 0) return `${hrs}h ${mins}m`;
     return `${mins}m`;
 }
 
@@ -56,9 +70,8 @@ function getInitialTab(searchParams: URLSearchParams): TabType {
 const SidebarItem = ({ label, active, onClick, icon }: any) => (
     <button
         onClick={onClick}
-        className={`w-full aspect-square rounded-2xl flex flex-col gap-1 items-center justify-center transition-all relative ${
-            active ? 'bg-[#00ff88]/10 text-[#00ff88]' : 'text-[#444] hover:text-white hover:bg-white/5'
-        }`}
+        className={`w-full aspect-square rounded-2xl flex flex-col gap-1 items-center justify-center transition-all relative ${active ? 'bg-[#00ff88]/10 text-[#00ff88]' : 'text-[#444] hover:text-white hover:bg-white/5'
+            }`}
     >
         {active && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-[#00ff88] rounded-r-full" />}
         {icon}
@@ -76,6 +89,7 @@ const OrchestratorTerminal: React.FC = () => {
     const {
         stats, nodes, profiles, alerts, events, services, connections, backupStatus,
         loading, refreshing, fetchData, debouncedFetch,
+        setStats,
         setAlerts, setEvents, setProfiles,
         updateNodeLive, markNodeOnline, markNodeOffline,
     } = useOrchestratorData();
@@ -107,29 +121,47 @@ const OrchestratorTerminal: React.FC = () => {
     } = useDashboardModals();
 
     // ─── UI STATE (solo vive en este componente) ──────────────────
-    const [autoRefresh, setAutoRefresh]         = useState(true);
-    const [activeTab, setActiveTab]             = useState<TabType>(() => getInitialTab(searchParams));
-    const [searchText, setSearchText]           = useState(searchParams.get('q') || '');
-    const [filters, setFilters]                 = useState({
-        status:     searchParams.get('status') || 'ALL',
+    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [activeTab, setActiveTab] = useState<TabType>(() => getInitialTab(searchParams));
+    const [searchText, setSearchText] = useState(searchParams.get('q') || '');
+    const [filters, setFilters] = useState({
+        status: searchParams.get('status') || 'ALL',
         minLatency: Number(searchParams.get('minLat')) || 0,
-        minMem:     Number(searchParams.get('minMem')) || 0,
+        minMem: Number(searchParams.get('minMem')) || 0,
     });
-    const [dashFilters, setDashFilters]         = useState({
+    const [dashFilters, setDashFilters] = useState({
         timeRange: '1h', severity: 'ALL', owner: 'ALL', cookieStatus: 'ALL'
     });
     const [rotationInProgress, setRotationInProgress] = useState(false);
+    const [selectedComputerId, setSelectedComputerId] = useState<string | null>(null);
 
-    const alertsEndRef   = useRef<HTMLDivElement>(null);
+    // Auto-detectar computer propio por IP
+    useEffect(() => {
+        orchestratorService.getMyComputer()
+            .then(data => {
+                if (data.computer_id) {
+                    setSelectedComputerId(data.computer_id.toString());
+                }
+            })
+            .catch(() => {
+                const first = nodes.find(n => n.status === 'ONLINE');
+                if (first) setSelectedComputerId(first.id);
+            });
+    }, [nodes]); // ← re-detectar cuando cambian los nodos
+
+    const [verifyInProgress, setVerifyInProgress] = useState(false);
+    const [activeAction, setActiveAction] = useState<string | null>(null);
+
+    const alertsEndRef = useRef<HTMLDivElement>(null);
     const rotationLogRef = useRef<string[]>([]);
     const autoRefreshRef = useRef(autoRefresh);
     useEffect(() => { autoRefreshRef.current = autoRefresh; }, [autoRefresh]);
 
     // ─── ESTADO PARA MODALES CON FETCH ───────────────────────────
-    const [eventPages, setEventPages]               = useState<any[]>([]);
+    const [eventPages, setEventPages] = useState<any[]>([]);
     const [eventPagesLoading, setEventPagesLoading] = useState(false);
-    const [proxyLogs, setProxyLogs]                 = useState<any[]>([]);
-    const [proxyLogsLoading, setProxyLogsLoading]   = useState(false);
+    const [proxyLogs, setProxyLogs] = useState<any[]>([]);
+    const [proxyLogsLoading, setProxyLogsLoading] = useState(false);
 
     // ─── DERIVED ─────────────────────────────────────────────────
     const liveSelectedNode = useMemo(
@@ -146,14 +178,14 @@ const OrchestratorTerminal: React.FC = () => {
 
     const visibleContent = useMemo(() => {
         const q = searchText.toLowerCase();
-        if (activeTab === 'NODES')       return nodes.filter(n => n.name.toLowerCase().includes(q));
-        if (activeTab === 'PROFILES')    return profiles.filter(p => {
+        if (activeTab === 'NODES') return nodes.filter(n => n.name.toLowerCase().includes(q));
+        if (activeTab === 'PROFILES') return profiles.filter(p => {
             const nm = p.name.toLowerCase().includes(q) || (p.owner ?? '').toLowerCase().includes(q);
             const om = dashFilters.owner === 'ALL' || p.owner === dashFilters.owner;
             const cm = dashFilters.cookieStatus === 'ALL' || p.cookieStatus === dashFilters.cookieStatus;
             return nm && om && cm;
         });
-        if (activeTab === 'ALERTS')      return alerts.filter(a => a.message.toLowerCase().includes(q));
+        if (activeTab === 'ALERTS') return alerts.filter(a => a.message.toLowerCase().includes(q));
         if (activeTab === 'CONNECTIONS') return connections.filter(c => c.url.toLowerCase().includes(q));
         return [];
     }, [activeTab, nodes, profiles, alerts, connections, searchText, dashFilters]);
@@ -174,10 +206,10 @@ const OrchestratorTerminal: React.FC = () => {
     useEffect(() => {
         const t = setTimeout(() => {
             setSearchParams(prev => {
-                searchText               ? prev.set('q', searchText)                       : prev.delete('q');
-                filters.status !== 'ALL' ? prev.set('status', filters.status)              : prev.delete('status');
-                filters.minLatency > 0   ? prev.set('minLat', String(filters.minLatency))  : prev.delete('minLat');
-                filters.minMem > 0       ? prev.set('minMem', String(filters.minMem))      : prev.delete('minMem');
+                searchText ? prev.set('q', searchText) : prev.delete('q');
+                filters.status !== 'ALL' ? prev.set('status', filters.status) : prev.delete('status');
+                filters.minLatency > 0 ? prev.set('minLat', String(filters.minLatency)) : prev.delete('minLat');
+                filters.minMem > 0 ? prev.set('minMem', String(filters.minMem)) : prev.delete('minMem');
                 return prev;
             });
         }, 500);
@@ -189,12 +221,11 @@ const OrchestratorTerminal: React.FC = () => {
         if (!['agent_metrics', 'pong'].includes(event.type)) {
             console.log('[WS]', event.type, JSON.stringify(event).slice(0, 120));
         }
-
         // Métricas del agente — UN solo bloque
         if (event.type === 'agent_metrics') {
-            const cid      = event.computer_id?.toString();
-            const cpu      = event.data?.system?.cpu_percent    ?? 0;
-            const ram      = event.data?.system?.memory_percent ?? 0;
+            const cid = event.computer_id?.toString();
+            const cpu = event.data?.system?.cpu_percent ?? 0;
+            const ram = event.data?.system?.memory_percent ?? 0;
             const browsers = event.data?.active_browsers_count;
             if (!cid || ram === 0) return;
             updateNodeLive(cid, cpu, ram, browsers);
@@ -204,77 +235,326 @@ const OrchestratorTerminal: React.FC = () => {
 
         if (event.type === 'agent_log') {
             appendLog(event.computer_id?.toString(), event.log);
+
+            // Detectar estado de AdsPower y refrescar services
+            const msg = event.log?.message ?? '';
+            if (msg.includes('AdsPower no está disponible')) {
+                fetchData(); // ← services se actualizará con adspower DEGRADED
+            } else if (msg.includes('AdsPower disponible nuevamente')) {
+                fetchData(); // ← services se actualizará con adspower ONLINE
+            }
+
+            // Si es ERROR, mostrarlo también en el feed principal y alertas
+            if (event.log?.level === 'ERROR' || event.log?.level === 'WARNING') {
+                const rawMsg = event.log?.message ?? 'Error en agente';
+
+                // Clasificar el error para mensaje amigable
+                const friendlyMsg = rawMsg.includes('AdsPower no está disponible') || rawMsg.includes('ADSPOWER_OFFLINE')
+                    ? '🔴 AdsPower no disponible — abre la aplicación en el agente'
+                    : rawMsg.includes('Proxy inválido') || rawMsg.includes('PROXY_INVALID') || rawMsg.includes('Check Proxy')
+                        ? '🔴 Proxy inválido o caído — ejecuta rotación de proxies'
+                        : rawMsg.includes('Timeout') || rawMsg.includes('TIMEOUT')
+                            ? '🟡 Timeout abriendo navegador — AdsPower tardó demasiado'
+                            : rawMsg.includes('Profile does not exist') || rawMsg.includes('PROFILE_NOT_FOUND')
+                                ? '🔴 Perfil no encontrado en AdsPower — puede haber sido eliminado'
+                                : rawMsg;
+
+                setEvents(prev => [{
+                    id: `ws-log-${Date.now()}`,
+                    type: event.log?.level === 'ERROR' ? 'ERROR' as const : 'INFO' as const,
+                    message: friendlyMsg,
+                    source: `Computer #${event.computer_id}`,
+                    timestamp: new Date().toLocaleTimeString(),
+                    meta: { raw: rawMsg }, // guardamos el original por si necesitan ver causa
+                }, ...prev.slice(0, 18)]);
+
+                if (event.log?.level === 'ERROR') {
+                    setAlerts(prev => [{
+                        id: Date.now(),
+                        type: 'ERROR' as const,
+                        message: friendlyMsg,
+                        source: `agent-${event.computer_id}`,
+                        read: false,
+                        timestamp: new Date().toLocaleTimeString(),
+                    }, ...prev]);
+                    // ← AGREGAR: actualizar contador de stats
+                    setStats(prev => prev ? {
+                        ...prev,
+                        alertsActive: (prev.alertsActive ?? 0) + 1
+                    } : prev);
+                }
+            }
+            return;
+        }
+
+        if (event.type === 'profile_created') {
+            const name = event.name ?? `Perfil #${event.profile_id}`;
+            setEvents(prev => [{
+                id: `ws-profile-${Date.now()}`,
+                type: event.adspower_id ? 'SUCCESS' as const : 'ERROR' as const,
+                message: event.adspower_id
+                    ? `✅ Perfil creado en AdsPower — ${name}`
+                    : `❌ Error creando perfil — ${name}`,
+                source: `agent-${event.computer_id ?? 1}`,
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 18)]);
+            if (autoRefreshRef.current) fetchData();
+            return;
+        }
+
+        if (event.type === 'profile_ready') {
+            // Actualizar adspower_id en lista local inmediatamente
+            if (event.profile_id && event.adspower_id) {
+                setProfiles(prev => prev.map(p =>
+                    p.id === event.profile_id.toString()
+                        ? { ...p, adsId: event.adspower_id }
+                        : p
+                ));
+            }
+            setEvents(prev => [{
+                id: `ws-profile-ready-${Date.now()}`,
+                type: 'SUCCESS' as const,
+                message: `✅ Perfil listo — ${event.adspower_id}`,
+                source: `agent-${event.computer_id ?? 1}`,
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 18)]);
+            if (autoRefreshRef.current) fetchData();
             return;
         }
 
         if (event.type === 'agent_online' || event.type === 'agent_checkin') {
             const cid = event.computer_id?.toString();
-            if (cid) markNodeOnline(cid, event.connected_since);
+            const name = event.name ?? `Computer #${cid}`;
+            if (cid) {
+                markNodeOnline(cid, event.connected_since);
+
+                setEvents(prev => [{
+                    id: `ws-online-${Date.now()}`,
+                    type: 'SUCCESS' as const,
+                    message: `✅ Agente conectado — ${name}`,
+                    source: 'agent',
+                    timestamp: new Date().toLocaleTimeString(),
+                    meta: {},
+                }, ...prev.slice(0, 18)]);
+
+                fetchData();
+            }
             return;
         }
 
         if (event.type === 'agent_offline') {
             const cid = event.computer_id?.toString();
-            if (cid) markNodeOffline(cid);
+            const name = event.name ?? `Computer #${cid}`;
+            if (cid) {
+                markNodeOffline(cid);
+
+                // Crear alerta visible
+                setAlerts(prev => [{
+                    id: Date.now(),
+                    type: 'ERROR' as const,
+                    message: `Agente desconectado: ${name}`,
+                    source: 'agent',
+                    read: false,
+                    timestamp: new Date().toLocaleTimeString(),
+                }, ...prev]);
+
+                // Agregar al feed de eventos
+                setEvents(prev => [{
+                    id: `ws-offline-${Date.now()}`,
+                    type: 'ERROR' as const,
+                    message: `❌ Agente offline — ${name}`,
+                    source: 'agent',
+                    timestamp: new Date().toLocaleTimeString(),
+                    meta: {},
+                }, ...prev.slice(0, 18)]);
+
+                // Refrescar stats para actualizar top bar
+                fetchData();
+            }
             return;
         }
 
         if (event.type === 'session_created' || event.type === 'session_active') {
             setEvents(prev => [{
-                id:        `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                type:      'SUCCESS' as const,
-                message:   event.message ?? `Sesión creada — ${event.profile}`,
-                source:    event.agent_name ?? 'Agent',
+                id: `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                type: 'SUCCESS' as const,
+                message: event.message ?? `Sesión creada — ${event.profile}`,
+                source: event.agent_name ?? 'Agent',
                 timestamp: new Date().toLocaleTimeString(),
-                meta:      { session_id: event.session_id },
+                meta: { session_id: event.session_id },
             }, ...prev.slice(0, 18)]);
-            if (autoRefreshRef.current) debouncedFetch();
+
+            // Actualizar KPI optimistamente — sin esperar REST
+            setStats(prev => ({
+                nodesOnline: prev?.nodesOnline ?? 1,
+                nodesTotal: prev?.nodesTotal ?? 1,
+                profilesActive: (prev?.profilesActive ?? 0) + 1,
+                browsersOpen: (prev?.browsersOpen ?? 0) + 1,
+                alertsActive: prev?.alertsActive ?? 0,
+                healthScore: prev?.healthScore ?? 100,
+                healthRisks: prev?.healthRisks ?? [],
+            }));
+
+            // Fetch tardío para sincronizar con BD
+            if (autoRefreshRef.current) setTimeout(() => fetchData(), 3000);
             return;
         }
 
         if (event.type === 'session_closed') {
             setEvents(prev => [{
-                id:        `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                type:      'INFO' as const,
-                message:   `Sesión cerrada — ${event.duration_seconds ?? 0}s`,
-                source:    event.agent_name ?? 'Agent',
+                id: `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                type: 'INFO' as const,
+                message: `Sesión cerrada — Perfil #${event.profile_id ?? 'None'} - ${event.duration_seconds ?? 0}s, ${(event.total_data_mb ?? 0).toFixed(1)}MB`,
+                source: event.agent_name ?? 'Agent',
                 timestamp: new Date().toLocaleTimeString(),
-                meta:      { session_id: event.session_id },
+                meta: { session_id: event.session_id },
             }, ...prev.slice(0, 18)]);
-            if (autoRefreshRef.current) debouncedFetch();
+
+            // Actualizar KPI optimistamente — sin esperar REST
+            setStats(prev => ({
+                nodesOnline: prev?.nodesOnline ?? 1,
+                nodesTotal: prev?.nodesTotal ?? 1,
+                profilesActive: Math.max(0, (prev?.profilesActive ?? 1) - 1),
+                browsersOpen: Math.max(0, (prev?.browsersOpen ?? 1) - 1),
+                alertsActive: prev?.alertsActive ?? 0,
+                healthScore: prev?.healthScore ?? 100,
+                healthRisks: prev?.healthRisks ?? [],
+            }));
+
+            // Fetch tardío para sincronizar con BD
+            if (autoRefreshRef.current) setTimeout(() => fetchData(), 3000);
             return;
         }
 
-        if (event.type === 'rotation_progress') {
-            const s    = event.stats;
-            const icon = event.result === 'ok' ? '✓' : event.result === 'rotated' ? '↺' : '✗';
-            rotationLogRef.current = [...rotationLogRef.current, `${icon} ${event.detail}`];
+        if (event.type === 'session_crashed') {
+            const reason = event.crash_reason ?? 'Error desconocido';
+            const friendlyReason = reason.includes('Proxy') || reason.includes('Check Proxy')
+                ? '🔴 Proxy inválido o caído'
+                : reason.includes('AdsPower')
+                    ? '🔴 AdsPower no disponible'
+                    : reason.includes('Timeout')
+                        ? '🟡 Timeout abriendo navegador'
+                        : reason;
+
+            setEvents(prev => [{
+                id: `ws-crash-${Date.now()}`,
+                type: 'ERROR' as const,
+                message: `Sesión crasheó — ${event.profile_name ?? `Perfil #${event.profile_id}`}: ${friendlyReason}`,
+                source: event.agent_name ?? 'Agent',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: { session_id: event.session_id },
+            }, ...prev.slice(0, 18)]);
+
+            setAlerts(prev => [{
+                id: Date.now(),
+                type: 'ERROR' as const,
+                message: `Sesión crasheó — ${friendlyReason}`,
+                source: `agent-${event.computer_id}`,
+                read: false,
+                timestamp: new Date().toLocaleTimeString(),
+            }, ...prev]);
+
+            setStats(prev => prev ? {
+                ...prev,
+                alertsActive: (prev.alertsActive ?? 0) + 1
+            } : prev);
+
+            if (autoRefreshRef.current) setTimeout(() => fetchData(), 2000);
+            return;
+        }
+
+        if (event.type === 'system_event' && event.event === 'verify_profiles_start') {
             setEvents(prev => prev.map(e =>
-                e.source === 'proxy_rotation' &&
-                (e.message.startsWith('Rotando') || e.message.includes('iniciada'))
-                    ? {
-                        ...e,
-                        message: `Rotando proxies — ${s.optimal}✓ ${s.rotated}↺ ${s.failed}✗ / ${s.total}`,
-                        type:    'INFO' as const,
-                        meta:    { log: [...rotationLogRef.current] },
-                    }
+                e.id === 'ws-verify-active'
+                    ? { ...e, message: `🔍 Verificando ${event.stats?.total ?? ''} perfiles — en proceso...` }
                     : e
             ));
             return;
         }
 
+        if (event.type === 'system_event' && event.event === 'verify_profiles_complete') {
+            const s = event.stats;
+            setEvents(prev => [
+                {
+                    id: 'ws-verify-complete',
+                    type: s?.verified === s?.total ? 'SUCCESS' as const : 'WARNING' as const,
+                    message: `✅ Verificación completada — ${s?.verified}/${s?.total} perfiles actualizados`,
+                    source: 'verify_profiles',
+                    timestamp: new Date().toLocaleTimeString(),
+                    meta: {},
+                },
+                ...prev.filter(e => e.id !== 'ws-verify-active').slice(0, 17),
+            ]);
+            fetchData(); // ← actualizar scores en tabla de perfiles
+            setVerifyInProgress(false);  // ← AGREGAR
+            setActiveAction(null);
+            return;
+        }
+
+        if (event.type === 'rotation_progress') {
+            const s = event.stats;
+            const icon = event.result === 'ok' ? '✓' : event.result === 'rotated' ? '↺' : '✗';
+            rotationLogRef.current = [...rotationLogRef.current, `${icon} ${event.detail}`];
+
+            setRotationInProgress(true); // ← asegurar que el estado es correcto
+
+            setEvents(prev => {
+                // Verificar si ya existe el evento de rotación
+                const exists = prev.some(e =>
+                    e.source === 'proxy_rotation' &&
+                    (e.message.startsWith('Rotando') || e.message.includes('iniciada'))
+                );
+
+                const updatedEvent = {
+                    id: 'ws-rotation-active',
+                    type: 'INFO' as const,
+                    message: `Rotando proxies — ${s.optimal}✓ ${s.rotated}↺ ${s.failed}✗ / ${s.total}`,
+                    source: 'proxy_rotation',
+                    timestamp: new Date().toLocaleTimeString(),
+                    meta: { log: [...rotationLogRef.current] },
+                };
+
+                if (!exists) {
+                    // Si no existe, crear uno nuevo al principio
+                    return [updatedEvent, ...prev.slice(0, 18)];
+                }
+
+                // Si existe, actualizarlo
+                return prev.map(e =>
+                    e.source === 'proxy_rotation' &&
+                        (e.message.startsWith('Rotando') || e.message.includes('iniciada'))
+                        ? updatedEvent
+                        : e
+                );
+            });
+            return;
+        }
+        if (event.type === 'system_event' && event.event === 'proxy_auto_rotated') {
+            setEvents(prev => [{
+                id: `ws-autorotate-${Date.now()}`,
+                type: 'INFO' as const,
+                message: `🔄 ${event.message}`,
+                source: 'auto_rotation',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 18)]);
+            return;
+        }
+
         if (event.type === 'system_event' && event.event === 'proxy_rotation_complete') {
-            const s            = event.stats;
-            const capturedLog  = [...rotationLogRef.current];
+            const s = event.stats;
+            const capturedLog = [...rotationLogRef.current];
             rotationLogRef.current = [];
 
             const completionEvent = {
-                id:        'ws-rotation-active',
-                type:      (s.failed === 0 ? 'SUCCESS' : 'ERROR') as const,
-                message:   `Rotación completada — ${s.optimal} óptimos · ${s.rotated} rotados · ${s.failed} fallidos`,
-                source:    'proxy_rotation',
+                id: 'ws-rotation-active',
+                type: (s.failed === 0 ? 'SUCCESS' : 'ERROR') as const,
+                message: `Rotación completada — ${s.optimal} óptimos · ${s.rotated} rotados · ${s.failed} fallidos`,
+                source: 'proxy_rotation',
                 timestamp: new Date().toLocaleTimeString(),
-                meta:      { log: capturedLog },
+                meta: { log: capturedLog },
             };
 
             setEvents(prev => [
@@ -288,11 +568,13 @@ const OrchestratorTerminal: React.FC = () => {
                 prev?.id === 'ws-rotation-active' ? completionEvent : prev
             );
             setRotationInProgress(false);
+            setActiveAction(null);  // ← AGREGAR
             if (autoRefreshRef.current) debouncedFetch();
             return;
         }
 
-    }, [debouncedFetch, updateNodeLive, appendMetric, appendLog, markNodeOnline, markNodeOffline, setEvents, setSelectedEvent]);
+    }, [debouncedFetch, fetchData, setStats, updateNodeLive, appendMetric, appendLog,
+        markNodeOnline, markNodeOffline, setAlerts, setEvents, setProfiles, setSelectedEvent]);
 
     useAdminWS(handleWSEvent, autoRefresh);
 
@@ -333,22 +615,49 @@ const OrchestratorTerminal: React.FC = () => {
     }, [setSelectedConn]);
 
     const handleStartSessions = async (selectedIds: string[]) => {
-        const computer = nodes.find(n => n.status === 'ONLINE');
-        if (!computer) { alert('No hay computadoras online'); return; }
+        const computer = nodes.find(n => n.id === selectedComputerId && n.status === 'ONLINE')
+            ?? nodes.find(n => n.status === 'ONLINE');
+        if (!computer) { alert('No hay agentes online'); return; }
         const results = await Promise.allSettled(
             selectedIds.map(id => {
                 const p = profiles.find(prof => prof.id === id);
-                if (!p) return Promise.reject();
+                if (!p) return Promise.reject(new Error('Perfil no encontrado'));
+                if (p.adsId?.startsWith('pending')) {
+                    return Promise.reject(new Error(`Perfil "${p.name}" aún no está listo en AdsPower`));
+                }
                 return orchestratorService.openBrowser({
                     profileAdsId: p.adsId,
-                    computerId:   parseInt(computer.id),
-                    targetUrl:    'https://www.google.com',
-                    agentName:    'admin-panel',
+                    computerId: parseInt(computer.id),
+                    targetUrl: 'https://www.google.com',
+                    agentName: 'admin-panel',
                 });
             })
         );
+        results.forEach((r, i) => {
+            if (r.status === 'rejected') {
+                const p = profiles.find(prof => prof.id === selectedIds[i]);
+                if (p?.adsId?.startsWith('pending')) {
+                    setAlerts(prev => [{
+                        id: Date.now(),
+                        type: 'ERROR' as const,
+                        message: `⚠️ Perfil "${p.name}" aún no está listo en AdsPower — espera que el agente lo procese`,
+                        source: 'agent',
+                        read: false,
+                        timestamp: new Date().toLocaleTimeString(),
+                    }, ...prev]);
+                }
+            }
+        });
         const ok = results.filter(r => r.status === 'fulfilled').length;
-        alert(`Iniciadas: ${ok} sesiones. Fallidas: ${results.length - ok}`);
+        const failed = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
+
+        if (failed.length > 0) {
+            const reasons = failed.map(f => f.reason?.message ?? 'Error desconocido').join('\n');
+            alert(`❌ ${failed.length} sesión(es) fallaron:\n${reasons}`);
+        }
+        if (ok > 0) {
+            alert(`⏳ ${ok} sesión(es) enviadas al agente — revisa la línea de tiempo.`);
+        }
         setShowSessionModal(false);
         fetchData();
     };
@@ -371,10 +680,10 @@ const OrchestratorTerminal: React.FC = () => {
         try {
             const data = await orchestratorService.getProfileHistory(profileId);
             setProfileHistoryData(data.items.map((s: any) => ({
-                id:        s.id.toString(),
-                type:      s.status === 'closed' ? 'SUCCESS' : s.status === 'crashed' ? 'ERROR' : 'INFO',
-                message:   `${s.agent_name} — ${s.target_url ?? 'N/A'} (${s.duration_seconds ?? 0}s, ${(s.total_data_mb ?? 0).toFixed(1)} MB)`,
-                source:    `Computer #${s.computer_id}`,
+                id: s.id.toString(),
+                type: s.status === 'closed' ? 'SUCCESS' : s.status === 'crashed' ? 'ERROR' : 'INFO',
+                message: `${s.agent_name} — ${s.target_url ?? 'N/A'} (${s.duration_seconds ?? 0}s, ${(s.total_data_mb ?? 0).toFixed(1)} MB)`,
+                source: `Computer #${s.computer_id}`,
                 timestamp: s.requested_at,
             })));
             setSelectedProfileHistoryId(profileId);
@@ -405,14 +714,14 @@ const OrchestratorTerminal: React.FC = () => {
             setRotationInProgress(true);
             rotationLogRef.current = [];
             setEvents(prev => [{
-                id:        'ws-rotation-active',
-                type:      'INFO' as const,
-                message:   'Rotación de proxies iniciada...',
-                source:    'proxy_rotation',
+                id: 'ws-rotation-active',
+                type: 'INFO' as const,
+                message: 'Rotación de proxies iniciada...',
+                source: 'proxy_rotation',
                 timestamp: new Date().toLocaleTimeString(),
-                meta:      {},
+                meta: {},
             }, ...prev.slice(0, 18)]);
-            await orchestratorService.rotateAllProxies();
+            await orchestratorService.rotateAllProxies(selectedComputerId ?? undefined);
         } catch {
             setRotationInProgress(false);
             alert('Error proxies');
@@ -428,20 +737,19 @@ const OrchestratorTerminal: React.FC = () => {
                     <TerminalIcon size={24} />
                 </div>
                 <nav className="flex flex-col gap-6 w-full px-2">
-                    <SidebarItem label="Dash"   active={activeTab === 'DASHBOARD'}   onClick={() => setActiveTab('DASHBOARD')}   icon={<LayoutDashboard size={22} />} />
+                    <SidebarItem label="Dash" active={activeTab === 'DASHBOARD'} onClick={() => setActiveTab('DASHBOARD')} icon={<LayoutDashboard size={22} />} />
                     <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                    <SidebarItem label="Nodes"  active={activeTab === 'NODES'}       onClick={() => setActiveTab('NODES')}       icon={<Monitor size={22} />} />
-                    <SidebarItem label="Net"    active={activeTab === 'CONNECTIONS'} onClick={() => setActiveTab('CONNECTIONS')} icon={<Globe size={22} />} />
-                    <SidebarItem label="Alerts" active={activeTab === 'ALERTS'}      onClick={() => setActiveTab('ALERTS')}      icon={<Bell size={22} />} />
+                    <SidebarItem label="Nodes" active={activeTab === 'NODES'} onClick={() => setActiveTab('NODES')} icon={<Monitor size={22} />} />
+                    <SidebarItem label="Net" active={activeTab === 'CONNECTIONS'} onClick={() => setActiveTab('CONNECTIONS')} icon={<Globe size={22} />} />
+                    <SidebarItem label="Alerts" active={activeTab === 'ALERTS'} onClick={() => setActiveTab('ALERTS')} icon={<Bell size={22} />} />
                     <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                    <SidebarItem label="Profs"  active={activeTab === 'PROFILES'}    onClick={() => setActiveTab('PROFILES')}    icon={<Users size={22} />} />
+                    <SidebarItem label="Profs" active={activeTab === 'PROFILES'} onClick={() => setActiveTab('PROFILES')} icon={<Users size={22} />} />
                 </nav>
                 <div className="mt-auto">
                     <button
                         onClick={() => setActiveTab('SETTINGS')}
-                        className={`size-10 rounded-xl flex items-center justify-center transition-colors ${
-                            activeTab === 'SETTINGS' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'text-[#444] hover:text-white hover:bg-white/5'
-                        }`}
+                        className={`size-10 rounded-xl flex items-center justify-center transition-colors ${activeTab === 'SETTINGS' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'text-[#444] hover:text-white hover:bg-white/5'
+                            }`}
                     >
                         <Settings size={20} />
                     </button>
@@ -505,14 +813,14 @@ const OrchestratorTerminal: React.FC = () => {
                                 </div>
 
                                 <section className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                                    <div className="lg:col-span-2">
-                                        <GlobalStatusHero
-                                            status={(stats?.healthScore || 0) > 80 ? 'OK' : 'DEGRADED'}
-                                            lastUpdate="2s"
-                                            autoRefresh={autoRefresh}
-                                            onToggleAuto={() => setAutoRefresh(v => !v)}
-                                            onClick={() => setShowSystemDiag(true)}
-                                        />
+                                    <div className="lg:col-span-2">                                    <GlobalStatusHero
+                                        status={(stats?.healthScore || 0) > 80 ? 'OK' : 'DEGRADED'}
+                                        lastUpdate="2s"
+                                        autoRefresh={autoRefresh}
+                                        onToggleAuto={() => setAutoRefresh(v => !v)}
+                                        onClick={() => setShowSystemDiag(true)}
+                                        verdict={computeVerdict(stats?.healthScore ?? 0, stats?.healthRisks ?? [], services)}
+                                    />
                                     </div>
                                     <div className="lg:col-span-1 h-full">
                                         <MiniCapacityPanel
@@ -524,7 +832,7 @@ const OrchestratorTerminal: React.FC = () => {
                                     </div>
                                     <div className="lg:col-span-1 h-full">
                                         <JobsQueueWidget
-                                            queue={0}
+                                            queue={stats?.pendingProfiles ?? 0}
                                             running={(stats?.browsersOpen ?? 0) + (rotationInProgress ? 1 : 0)}
                                             failed={alerts.filter(a => !a.read && a.source !== 'proxy_rotation').length}
                                             onClick={() => setShowJobQueue(true)}
@@ -533,43 +841,112 @@ const OrchestratorTerminal: React.FC = () => {
                                 </section>
 
                                 <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    <AdminKPICard label="Computadoras Online"  value={stats ? `${stats.nodesOnline}/${stats.nodesTotal}` : '-/-'} icon={<Server size={20} />}        active loading={loading} trend="+2 vs 1h"        tooltip="Nodos conectados"  onClick={() => setDashModal({ type: 'NODES',    data: nodes })} />
-                                    <AdminKPICard label="Perfiles Activos"     value={stats ? stats.profilesActive.toString() : '-'}             icon={<Users size={20} />}         loading={loading} trend="Stable"               tooltip="Sesiones activas"  onClick={() => setDashModal({ type: 'PROFILES', data: profiles.filter(p => p.status !== 'IDLE') })} />
-                                    <AdminKPICard label="Navegadores Abiertos" value={stats ? stats.browsersOpen.toString() : '-'}               icon={<CheckCircle2 size={20} />}  loading={loading}                              tooltip="Instancias Chrome" onClick={() => setDashModal({ type: 'BROWSERS', data: nodes.map(n => ({ name: n.name, openBrowsers: n.openBrowsers })) })} />
-                                    <AdminKPICard label="Alertas Activas"      value={stats ? stats.alertsActive.toString() : '-'}               icon={<AlertTriangle size={20} />} loading={loading} alert={(stats?.alertsActive || 0) > 0} trend={stats?.alertsActive ? '+1 Reciente' : '0'} tooltip="Alertas" onClick={() => setDashModal({ type: 'ALERTS', data: alerts.filter(a => !a.read) })} />
+                                    <AdminKPICard label="Computadoras Online" value={stats ? `${stats.nodesOnline}/${stats.nodesTotal}` : '-/-'} icon={<Server size={20} />} active loading={loading} trend="+2 vs 1h" tooltip="Nodos conectados" onClick={() => setDashModal({ type: 'NODES', data: nodes })} />
+                                    <AdminKPICard label="Perfiles Activos" value={stats ? stats.profilesActive.toString() : '-'} icon={<Users size={20} />} loading={loading} trend="Stable" tooltip="Sesiones activas" onClick={() => setDashModal({ type: 'PROFILES', data: profiles.filter(p => p.status !== 'IDLE') })} />
+                                    <AdminKPICard label="Navegadores Abiertos" value={stats ? stats.browsersOpen.toString() : '-'} icon={<CheckCircle2 size={20} />} loading={loading} tooltip="Instancias Chrome" onClick={() => setDashModal({ type: 'BROWSERS', data: nodes.map(n => ({ name: n.name, openBrowsers: n.openBrowsers })) })} />
+                                    <AdminKPICard label="Alertas Activas" value={stats ? stats.alertsActive.toString() : '-'} icon={<AlertTriangle size={20} />} loading={loading} alert={(stats?.alertsActive || 0) > 0} trend={stats?.alertsActive ? '+1 Reciente' : '0'} tooltip="Alertas" onClick={() => setDashModal({ type: 'ALERTS', data: alerts.filter(a => !a.read) })} />
                                 </section>
 
                                 <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[400px]">
                                     <div className="lg:col-span-1">
-                                        <HealthOverview score={stats?.healthScore || 0} risks={stats?.healthRisks || []} onDetails={() => setShowHealthDetail(true)} />
+                                        <HealthOverview
+                                            score={stats?.healthScore || 0}
+                                            risks={stats?.healthRisks || []}
+                                            healthDetails={stats?.healthDetails}
+                                            onDetails={() => setShowHealthDetail(true)}
+                                        />
                                     </div>
-                                    <div className="lg:col-span-2">
+                                    <div className="lg:col-span-2 overflow-hidden">
                                         <SystemEventsFeed events={events} onEventClick={handleEventClick} />
                                     </div>
                                 </section>
 
                                 <section className="bg-[#0c0c0c] border border-white/5 rounded-2xl p-6">
-                                    <h3 className="text-[10px] font-black text-[#444] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                                        <TerminalIcon size={12} className="text-[#00ff88]" /> Panel de Agente
-                                    </h3>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-[10px] font-black text-[#444] uppercase tracking-[0.2em] flex items-center gap-2">
+                                            <TerminalIcon size={12} className="text-[#00ff88]" /> Panel de Agente
+                                        </h3>
+                                        <div className="flex items-center gap-2">
+                                            <div className={`size-2 rounded-full ${selectedComputerId && nodes.find(n => n.id === selectedComputerId)?.status === 'ONLINE'
+                                                ? 'bg-[#00ff88] animate-pulse'
+                                                : selectedComputerId
+                                                    ? 'bg-red-500'
+                                                    : 'bg-amber-500 animate-pulse'
+                                                }`} />
+                                            <span className="text-[9px] text-[#555] font-mono">
+                                                {(() => {
+                                                    const node = nodes.find(n => n.id === selectedComputerId);
+                                                    if (!node) return 'Detectando...';
+                                                    if (node.status === 'ONLINE') return node.name;
+                                                    return `${node.name} — offline`;
+                                                })()}
+                                            </span>
+                                        </div>
+                                    </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                         {([
-                                            { label: 'Iniciar Sesión',     desc: 'Seleccionar y abrir perfiles',   icon: <Monitor size={24} />,   color: '#00ff88', fn: () => setShowSessionModal(true) },
-                                            { label: 'Nuevo Perfil',       desc: 'Crear navegador y credenciales', icon: <Plus size={24} />,      color: '#ffffff', fn: () => setShowCreateProfile(true) },
-                                            { label: 'Monitor de Red',     desc: 'Rotar proxies lentos ahora',    icon: <RefreshCw size={24} />, color: '#3b82f6', fn: handleRotateProxies },
-                                            { label: 'Logs de Sistema',    desc: 'Ver alertas y eventos',         icon: <History size={24} />,   color: '#f59e0b', fn: () => setActiveTab('ALERTS') },
-                                            { label: 'Verificar Perfiles', desc: 'Actualizar scores y cookies',   icon: <Shield size={24} />,    color: '#00ff88', fn: () => fetch('/api/v1/profiles/verify-all', { method: 'POST' }) },
-                                        ] as const).map(({ label, desc, icon, color, fn }) => (
-                                            <div key={label} onClick={fn} className="group cursor-pointer bg-[#0a0a0a] border border-white/5 hover:border-white/20 p-4 rounded-xl transition-all relative overflow-hidden">
-                                                <div className="absolute inset-0 bg-white/[0.03] translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                                                <div className="relative z-10 flex items-center gap-4">
-                                                    <div className="p-3 rounded-lg" style={{ background: `${color}18`, color }}>{icon}</div>
-                                                    <div>
-                                                        <h4 className="font-black text-white uppercase text-sm">{label}</h4>
-                                                        <p className="text-[10px] text-[#666] mt-1">{desc}</p>
-                                                    </div>
+                                            {
+                                                id: 'session',
+                                                label: 'Iniciar Sesión',
+                                                desc: activeAction === 'session' ? 'Enviando...' : 'Seleccionar y abrir perfiles',
+                                                icon: <Monitor size={24} />,
+                                                color: '#00ff88',
+                                                fn: () => setShowSessionModal(true)
+                                            },
+                                            {
+                                                id: 'profile',
+                                                label: 'Nuevo Perfil',
+                                                desc: 'Crear navegador y credenciales',
+                                                icon: <Plus size={24} />,
+                                                color: '#ffffff',
+                                                fn: () => setShowCreateProfile(true)
+                                            },
+                                            {
+                                                id: 'rotation',
+                                                label: 'Monitor de Red',
+                                                desc: rotationInProgress ? '⏳ Rotando proxies...' : 'Rotar proxies lentos ahora',
+                                                icon: <RefreshCw size={24} className={rotationInProgress ? 'animate-spin' : ''} />,
+                                                color: rotationInProgress ? '#666' : '#3b82f6',
+                                                fn: rotationInProgress ? () => { } : handleRotateProxies
+                                            },
+                                            {
+                                                id: 'logs',
+                                                label: 'Logs de Sistema',
+                                                desc: 'Ver alertas y eventos',
+                                                icon: <History size={24} />,
+                                                color: '#f59e0b',
+                                                fn: () => setActiveTab('ALERTS')
+                                            },
+                                            {
+                                                id: 'verify',
+                                                label: 'Verificar Perfiles',
+                                                desc: verifyInProgress ? '⏳ Verificando...' : 'Actualizar scores y cookies',
+                                                icon: <Shield size={24} className={verifyInProgress ? 'animate-pulse' : ''} />,
+                                                color: verifyInProgress ? '#666' : '#00ff88',
+                                                fn: verifyInProgress ? () => { } : async () => {
+                                                    setVerifyInProgress(true);
+                                                    setActiveAction('verify');
+                                                    setEvents(prev => [{
+                                                        id: 'ws-verify-active',
+                                                        type: 'INFO' as const,
+                                                        message: '🔍 Verificando perfiles — en proceso...',
+                                                        source: 'verify_profiles',
+                                                        timestamp: new Date().toLocaleTimeString(),
+                                                        meta: {},
+                                                    }, ...prev.slice(0, 18)]);
+                                                    await orchestratorService.verifyAllProfiles(selectedComputerId ?? undefined);
+                                                }
+                                            },
+                                        ] as const).map(({ id, label, desc, icon, color, fn }) => (<div key={label} onClick={fn} className={`group cursor-pointer bg-[#0a0a0a] border border-white/5 hover:border-white/20 p-4 rounded-xl transition-all relative overflow-hidden ${(id === 'rotation' && rotationInProgress) || (id === 'verify' && verifyInProgress) ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                                            <div className="absolute inset-0 bg-white/[0.03] translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                                            <div className="relative z-10 flex items-center gap-4">
+                                                <div className="p-3 rounded-lg" style={{ background: `${color}18`, color }}>{icon}</div>
+                                                <div>
+                                                    <h4 className="font-black text-white uppercase text-sm">{label}</h4>
+                                                    <p className="text-[10px] text-[#666] mt-1">{desc}</p>
                                                 </div>
                                             </div>
+                                        </div>
                                         ))}
                                     </div>
                                 </section>
@@ -580,17 +957,17 @@ const OrchestratorTerminal: React.FC = () => {
                             <section className="space-y-6 animate-in slide-in-from-bottom-4">
                                 <div className="sticky top-0 z-30 flex items-center gap-4 p-2 pl-4 bg-[#0c0c0c]/80 backdrop-blur-xl border border-white/5 rounded-2xl shadow-xl">
                                     <h3 className="text-[12px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                                        {activeTab === 'NODES'       && <Monitor size={14} className="text-[#00ff88]" />}
-                                        {activeTab === 'CONNECTIONS' && <Globe   size={14} className="text-[#00ff88]" />}
-                                        {activeTab === 'ALERTS'      && <Bell    size={14} className="text-[#00ff88]" />}
-                                        {activeTab === 'PROFILES'    && <Users   size={14} className="text-[#00ff88]" />}
+                                        {activeTab === 'NODES' && <Monitor size={14} className="text-[#00ff88]" />}
+                                        {activeTab === 'CONNECTIONS' && <Globe size={14} className="text-[#00ff88]" />}
+                                        {activeTab === 'ALERTS' && <Bell size={14} className="text-[#00ff88]" />}
+                                        {activeTab === 'PROFILES' && <Users size={14} className="text-[#00ff88]" />}
                                         {activeTab} VIEW
                                     </h3>
                                     <div className="h-4 w-px bg-white/10" />
                                     <div className="flex gap-1">
-                                        <FilterButton label="Computadoras" active={activeTab === 'NODES'}       onClick={() => setActiveTab('NODES')} />
-                                        <FilterButton label="Conexiones"   active={activeTab === 'CONNECTIONS'} onClick={() => setActiveTab('CONNECTIONS')} />
-                                        <FilterButton label="Alertas"      active={activeTab === 'ALERTS'}      onClick={() => setActiveTab('ALERTS')} dotColor={(stats?.alertsActive || 0) > 0 ? 'bg-red-500' : ''} />
+                                        <FilterButton label="Computadoras" active={activeTab === 'NODES'} onClick={() => setActiveTab('NODES')} />
+                                        <FilterButton label="Conexiones" active={activeTab === 'CONNECTIONS'} onClick={() => setActiveTab('CONNECTIONS')} />
+                                        <FilterButton label="Alertas" active={activeTab === 'ALERTS'} onClick={() => setActiveTab('ALERTS')} dotColor={(stats?.alertsActive || 0) > 0 ? 'bg-red-500' : ''} />
                                     </div>
                                     <div className="relative group">
                                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#444] group-focus-within:text-[#00ff88] transition-colors" />
@@ -650,8 +1027,8 @@ const OrchestratorTerminal: React.FC = () => {
                                                     alert={a}
                                                     onRead={() => setSelectedAlert(a)}
                                                     onAction={(action: string) => {
-                                                        if (action === 'SILENCE')    handleAlertSilence(a.id);
-                                                        if (action === 'RETRY')      fetchData();
+                                                        if (action === 'SILENCE') handleAlertSilence(a.id);
+                                                        if (action === 'RETRY') fetchData();
                                                         if (action === 'VIEW_CAUSE') setSelectedAlert(a);
                                                     }}
                                                 />
@@ -684,9 +1061,21 @@ const OrchestratorTerminal: React.FC = () => {
                     loadingPages={eventPagesLoading}
                     onClose={handleEventClose}
                 />
-                <SystemDiagnosticModal  isOpen={showSystemDiag}     onClose={() => setShowSystemDiag(false)} />
-                <ResourceDetailModal    isOpen={showResourceDetail}  onClose={() => setShowResourceDetail(false)} />
-                <JobQueueModal          isOpen={showJobQueue}        onClose={() => setShowJobQueue(false)} />
+                <SystemDiagnosticModal
+                    isOpen={showSystemDiag}
+                    onClose={() => setShowSystemDiag(false)}
+                    services={services}
+                    healthDetails={stats?.healthDetails}
+                />
+                <ResourceDetailModal isOpen={showResourceDetail} onClose={() => setShowResourceDetail(false)} />
+                <JobQueueModal
+                    isOpen={showJobQueue}
+                    onClose={() => setShowJobQueue(false)}
+                    queue={stats?.pendingProfiles ?? 0}
+                    running={(stats?.browsersOpen ?? 0) + (rotationInProgress ? 1 : 0)}
+                    failed={alerts.filter(a => !a.read && a.source !== 'proxy_rotation').length}
+                    pendingProfiles={profiles.filter(p => (p as any).status === 'IDLE' && p.adsId?.startsWith('pending'))}
+                />
                 <NodeItemDrawer
                     node={liveSelectedNode}
                     history={nodeHistory}
@@ -742,7 +1131,11 @@ const OrchestratorTerminal: React.FC = () => {
                     onCreate={async (data: any) => {
                         try {
                             await orchestratorService.createProfile(data);
-                            alert(`Perfil "${data.name}" creado correctamente.`);
+                            const agentOnline = nodes.some(n => n.status === 'ONLINE');
+                            alert(agentOnline
+                                ? `✅ Perfil "${data.name}" creado y enviado al agente.`
+                                : `⏳ Perfil "${data.name}" en cola — se creará cuando el agente se conecte.`
+                            );
                             setShowCreateProfile(false);
                             fetchData();
                         } catch {
