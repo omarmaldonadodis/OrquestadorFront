@@ -675,56 +675,7 @@ export const JobRow = ({ job, onClick }: { job: import('../types/orchestratorTyp
     );
 };
 
-// --- SETTINGS PANEL ---
-export const SettingsPanel = ({ backupStatus, onTriggerBackup }: { backupStatus?: import('../types/orchestratorTypes').BackupStatus, onTriggerBackup: () => void }) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6">
-            <h3 className="text-[11px] font-black text-white uppercase mb-4 flex items-center gap-2"><HardDrive size={16} /> Backups</h3>
-            <div className="space-y-4">
-                <div className="flex justify-between text-xs text-[#ccc]">
-                    <span>Last Backup</span>
-                    <span className="font-mono text-[#00ff88]">{backupStatus?.lastBackupTime || 'Measuring...'}</span>
-                </div>
-                <div className="flex justify-between text-xs text-[#ccc]">
-                    <span>Status</span>
-                    <span className="font-black text-green-500">{backupStatus?.status || 'UNKNOWN'}</span>
-                </div>
-                <div className="flex justify-between text-xs text-[#ccc]">
-                    <span>Size</span>
-                    <span className="font-mono text-[#666]">{backupStatus?.size || '-'}</span>
-                </div>
-                <button onClick={onTriggerBackup} className="w-full py-2 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase rounded text-white border border-white/5 transition-colors active:bg-[#00ff88]/20">
-                    Trigger Backup
-                </button>
-            </div>
-        </div>
-        <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6">
-            <h3 className="text-[11px] font-black text-white uppercase mb-4 flex items-center gap-2"><Globe size={16} /> API Status</h3>
-            <div className="space-y-4">
-                <div className="flex justify-between text-xs text-[#ccc]">
-                    <span>Version</span>
-                    <span className="font-mono text-[#666]">v2.4.1</span>
-                </div>
-                <div className="flex justify-between text-xs text-[#ccc]">
-                    <span>Documentation</span>
-                    <a href="#" className="font-black text-blue-500 hover:underline">/docs/swagger</a>
-                </div>
-                <div className="flex justify-between text-xs text-[#ccc]">
-                    <span>Rate Limit</span>
-                    <span className="font-mono text-[#666]">1000/min</span>
-                </div>
-            </div>
-        </div>
-        <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-6">
-            <h3 className="text-[11px] font-black text-white uppercase mb-4 flex items-center gap-2"><Terminal size={16} /> CLI Tools</h3>
-            <div className="bg-black/50 p-3 rounded font-mono text-[9px] text-[#00ff88] space-y-1">
-                <p>$ ws-orch status --full</p>
-                <p>$ ws-orch reset-nodes --force</p>
-                <p>$ ws-orch logs --tail 100</p>
-            </div>
-        </div>
-    </div>
-);
+
 // --- CONNECTION ROW ---
 export const ConnectionRow = ({ conn, linkedProfiles = [], onHistory }: {
     conn: import('../types/orchestratorTypes').ConnectionItem;

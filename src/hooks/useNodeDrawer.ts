@@ -33,10 +33,12 @@ export function useNodeDrawer() {
     const appendMetric = useCallback((cid: string, cpu: number, ram: number) => {
         if (selectedNodeRef.current?.id.toString() !== cid) return;
 
-        setNodeHistory(prev => [
-            ...prev.slice(-29),
-            { time: new Date().toLocaleTimeString(), cpu: Math.round(cpu), ram: Math.round(ram) },
-        ]);
+        setNodeHistory(prev => {
+            const point = { time: new Date().toLocaleTimeString(), cpu: Math.round(cpu), ram: Math.round(ram) };
+            // Si history estaba vacío, arrancar con un punto previo para que la barra no aparezca sola
+            const base = prev.length === 0 ? [point] : prev;
+            return [...base.slice(-29), point];
+        });
 
         const lastLog = lastMetricLogRef.current.get(cid) ?? 0;
         if (Date.now() - lastLog >= 30_000) {

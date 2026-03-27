@@ -57,7 +57,9 @@ export function useAdminWS(
         };
 
         ws.onerror = () => {
-            ws.close();   // dispara onclose → retry automático
+            if (ws.readyState !== WebSocket.CLOSING && ws.readyState !== WebSocket.CLOSED) {
+                ws.close();
+            }
         };
     }, [enabled]);
 
@@ -68,7 +70,10 @@ export function useAdminWS(
         return () => {
             mountedRef.current = false;
             if (retryRef.current) clearTimeout(retryRef.current);
-            wsRef.current?.close();
+            const ws = wsRef.current;
+            if (ws && ws.readyState !== WebSocket.CLOSING && ws.readyState !== WebSocket.CLOSED) {
+                ws.close();
+            }
             wsRef.current = null;
         };
     }, [enabled, connect]);

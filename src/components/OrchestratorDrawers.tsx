@@ -157,8 +157,7 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
     if (!node) return null;
 
     const isOnline = node.status === 'ONLINE';
-    const maxCpu = Math.max(...history.map(p => p.cpu), 1);
-    const maxRam = Math.max(...history.map(p => p.ram), 1);
+
 
     return (
         <>
@@ -220,7 +219,7 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
                         ) : (
                             <div className="h-24 flex items-end gap-[2px] bg-[#080808] border border-white/5 rounded-lg px-2 pt-2 pb-1 overflow-hidden">
                                 {history.map((pt, i) => {
-                                    const heightPct = Math.max((pt.cpu / maxCpu) * 100, 4);
+                                    const heightPct = Math.max(pt.cpu, 4);
                                     const isLast = i === history.length - 1;
                                     return (
                                         <div
@@ -257,7 +256,7 @@ export const NodeItemDrawer = ({ node, history, logs, onClose }: NodeDrawerProps
                         ) : (
                             <div className="h-24 flex items-end gap-[2px] bg-[#080808] border border-white/5 rounded-lg px-2 pt-2 pb-1 overflow-hidden">
                                 {history.map((pt, i) => {
-                                    const heightPct = Math.max((pt.ram / maxRam) * 100, 4);
+                                const heightPct = Math.max(pt.ram, 4);
                                     const isLast = i === history.length - 1;
                                     return (
                                         <div

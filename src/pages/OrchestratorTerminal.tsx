@@ -20,7 +20,7 @@ import {
     AdminKPICard, ComputerRow, AlertItem, SkeletonKPI,
     SkeletonRow, HealthOverview, SystemEventsFeed, ServiceStatusBar,
     ConnectionRow, ProfileRow, GlobalStatusHero, MiniCapacityPanel,
-    JobsQueueWidget, FilterButton, SettingsPanel
+    JobsQueueWidget, FilterButton,
 } from '@/components/OrchestratorComponents';
 import {
     NodeItemDrawer, AlertModal, SessionHistoryModal,
@@ -279,9 +279,9 @@ const OrchestratorTerminal: React.FC = () => {
         if (event.type === 'agent_metrics') {
             const cid = event.computer_id?.toString();
             const cpu = event.data?.system?.cpu_percent ?? 0;
-            const ram = event.data?.system?.memory_percent ?? 0;
+            const ram = event.data?.system?.ram_percent ?? event.data?.system?.memory_percent ?? 0;
             const browsers = event.data?.active_browsers_count;
-            if (!cid || ram === 0) return;
+            if (!cid || (cpu === 0 && ram === 0)) return;
             updateNodeLive(cid, cpu, ram, browsers);
             appendMetric(cid, cpu, ram);
             return;
@@ -1107,15 +1107,7 @@ const OrchestratorTerminal: React.FC = () => {
                     <div className="h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
                     <SidebarItem label="Profs" active={activeTab === 'PROFILES'} onClick={() => setActiveTab('PROFILES')} icon={<Users size={22} />} />
                 </nav>
-                <div className="mt-auto">
-                    <button
-                        onClick={() => setActiveTab('SETTINGS')}
-                        className={`size-10 rounded-xl flex items-center justify-center transition-colors ${activeTab === 'SETTINGS' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'text-[#444] hover:text-white hover:bg-white/5'
-                            }`}
-                    >
-                        <Settings size={20} />
-                    </button>
-                </div>
+
             </aside>
 
             <div className="flex-1 flex flex-col overflow-hidden relative bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#00ff8805] via-[#020202] to-[#020202]">
@@ -1419,11 +1411,6 @@ const OrchestratorTerminal: React.FC = () => {
                             </section>
                         )}
 
-                        {activeTab === 'SETTINGS' && (
-                            <div className="animate-in fade-in">
-                                <SettingsPanel backupStatus={backupStatus} onTriggerBackup={handleTriggerBackup} />
-                            </div>
-                        )}
                     </div>
                 </main>
 

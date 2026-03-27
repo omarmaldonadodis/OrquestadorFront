@@ -137,7 +137,7 @@ class OrchestratorService {
         cpu: Math.round(h.cpu ?? h.cpu_percent ?? h.cpu_usage ?? 0),
         ram: Math.round(h.ram ?? h.memory_percent ?? h.memory_usage ?? 0),
       }))
-      .filter((pt) => pt.cpu > 0 || pt.ram > 0); // descartar entradas fantasma (AdsPower sin datos del SO)
+      .filter((pt) => pt.cpu > 0 || pt.ram > 1); // descartar entradas fantasma (AdsPower sin datos del SO)
   }
 
   async getProfiles() {
