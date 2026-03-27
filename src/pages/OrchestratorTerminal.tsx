@@ -24,26 +24,67 @@ import {
 } from '@/components/OrchestratorComponents';
 import {
     NodeItemDrawer, AlertModal, SessionHistoryModal,
-    DashKPIModal, DashFiltersDrawer, HealthDetailModal, ServiceDetailModal,
+    DashKPIModal,
     SecurityCheckModal, SessionStartModal, CreateProfileModal, EventDetailModal,
     SystemDiagnosticModal, ResourceDetailModal, JobQueueModal,
     ProxyHistoryModal
 } from '@/components/OrchestratorDrawers';
 
 // ─── HELPER (fuera del componente) ──────────────────────────────────────────
+const CLEAN_ERROR_MAP: [string, string][] = [
+    ['Proxy inválido', 'Proxy inválido o caído — ejecuta rotación de proxies'],
+    ['Check Proxy', 'Proxy inválido o caído — ejecuta rotación de proxies'],
+    ['PROXY_INVALID', 'Proxy inválido o caído — ejecuta rotación de proxies'],
+    ['Proxy caído', 'Proxy caído — auto-rotación en progreso'],
+    ['AdsPower no disponible', 'AdsPower no disponible — verifica que la app esté abierta'],
+    ['ADSPOWER_OFFLINE', 'AdsPower no disponible — verifica que la app esté abierta'],
+    ['Timeout', 'Timeout al abrir navegador — AdsPower tardó demasiado'],
+    ['not exist', 'Perfil no encontrado en AdsPower — puede haber sido eliminado'],
+];
+
+
+function cleanAgentError(raw: string): string {
+    // Quitar prefijo Python [_main_:función:línea]
+    const cleaned = raw.replace(/^\[.*?\]\s*(✕\s*)?/, '').trim();
+
+    for (const [keyword, friendly] of CLEAN_ERROR_MAP) {
+        if (cleaned.toLowerCase().includes(keyword.toLowerCase())) return friendly;
+    }
+    return cleaned;
+}
+
 // Añadir función helper cerca de getInitialTab:
 function computeVerdict(score: number, risks: string[], services: ServiceStatus[]): string {
-    const degradedSvcs = services.filter(s => s.status === 'DEGRADED').map(s => s.name);
-    if (score >= 90) return '"Sistema operando nominalmente. Todos los servicios en línea."';
-    if (score >= 75) {
-        const issue = risks[0] ?? 'advertencias menores detectadas';
-        return `"Operación estable con avisos: ${issue.toLowerCase()}"`;
+    // Servicios críticos degradados (excluir Proxies si solo tiene datos de rotación vacíos)
+    const criticalDown = services.filter(
+        s => s.status === 'DEGRADED' && ['Database', 'Redis', 'Agents'].includes(s.name)
+    ).map(s => s.name);
+
+    const proxiesDegraded = services.find(s => s.name === 'Proxies')?.status === 'DEGRADED';
+    const soaxDegraded = services.find(s => s.name === 'SOAX')?.status === 'DEGRADED';
+
+    if (score >= 85) return '"Sistema operando nominalmente. Todos los servicios en línea."';
+
+    if (score >= 70) {
+        if (risks.length === 0) return '"Operación estable. Sin riesgos detectados."';
+        const issue = risks[0].toLowerCase();
+        return `"Operación estable con aviso: ${issue}"`;
     }
-    if (score >= 55) {
-        const down = degradedSvcs.slice(0, 2).join(', ');
-        return `"Degradación detectada${down ? ` en ${down}` : ''}. Revisar proxies y agentes."`;
+
+    if (score >= 50) {
+        if (proxiesDegraded && !soaxDegraded)
+            return '"Proxies con latencia alta — considera rotar. Resto del sistema OK."';
+        if (soaxDegraded)
+            return '"SOAX sin respuesta — verifica la API key y conectividad."';
+        if (criticalDown.length > 0)
+            return `"Servicio(s) con problemas: ${criticalDown.join(', ')}. Revisar conexiones."`;
+        return '"Degradación menor detectada — sistema funcional con advertencias."';
     }
-    return '"Estado crítico — múltiples servicios afectados. Intervención requerida."';
+
+    // score < 50
+    if (criticalDown.length >= 2)
+        return '"Estado crítico — múltiples servicios caídos. Intervención requerida."';
+    return '"Rendimiento bajo — revisa nodos offline y alertas activas."';
 }
 
 function formatUptime(ms: number): string {
@@ -134,7 +175,20 @@ const OrchestratorTerminal: React.FC = () => {
     });
     const [rotationInProgress, setRotationInProgress] = useState(false);
     const [selectedComputerId, setSelectedComputerId] = useState<string | null>(null);
-
+    // Estado de tareas de rotación
+    const [taskQueue, setTaskQueue] = useState({
+        failed: 0,    // proxy_task_failed sin resolver
+        processing: 0,    // proxy_rotation_started en curso
+        queue: 0,    // pendientes generales
+    });
+    const [proxyTasks, setProxyTasks] = useState<{
+        id: number;
+        profileName: string;
+        status: 'failed' | 'processing' | 'resolved';
+        message: string;
+        timestamp: string;
+    }[]>([]);
+    const [adspowerStatus, setAdspowerStatus] = useState<'online' | 'offline' | 'error' | null>(null);
     // Auto-detectar computer propio por IP
     useEffect(() => {
         orchestratorService.getMyComputer()
@@ -219,7 +273,7 @@ const OrchestratorTerminal: React.FC = () => {
     // ─── WS CALLBACK ─────────────────────────────────────────────
     const handleWSEvent = useCallback((event: any) => {
         if (!['agent_metrics', 'pong'].includes(event.type)) {
-            console.log('[WS]', event.type, JSON.stringify(event).slice(0, 120));
+            console.log('[WS]', event.type, JSON.stringify(event).slice(0, 300));
         }
         // Métricas del agente — UN solo bloque
         if (event.type === 'agent_metrics') {
@@ -236,48 +290,75 @@ const OrchestratorTerminal: React.FC = () => {
         if (event.type === 'agent_log') {
             appendLog(event.computer_id?.toString(), event.log);
 
-            // Detectar estado de AdsPower y refrescar services
             const msg = event.log?.message ?? '';
-            if (msg.includes('AdsPower no está disponible')) {
-                fetchData(); // ← services se actualizará con adspower DEGRADED
-            } else if (msg.includes('AdsPower disponible nuevamente')) {
-                fetchData(); // ← services se actualizará con adspower ONLINE
+            const rawMsg = msg;
+            const cleanMsg = cleanAgentError(rawMsg).toLowerCase();
+
+            // Detectar estados AdsPower (todo en minúsculas para evitar fallos)
+            const isOffline = cleanMsg.includes('adspower no está disponible') ||
+                cleanMsg.includes('adspower_offline') ||
+                cleanMsg.includes('dejó de responder');
+            const isOnline = cleanMsg.includes('adspower disponible nuevamente');
+
+            // Actualizar estado AdsPower y eventos sólo si cambia el estado
+            if (isOffline && adspowerStatus !== 'offline') {
+                setAdspowerStatus('offline');
+                setEvents(prev => [{
+                    id: `ws-adspower-off-${Date.now()}`,
+                    type: 'ERROR',
+                    message: '🔴 AdsPower no disponible — abre la aplicación en el agente',
+                    source: `Computer #${event.computer_id}`,
+                    timestamp: new Date().toLocaleTimeString(),
+                    meta: { raw: rawMsg },
+                }, ...prev.slice(0, 18)]);
+                fetchData();
+                return;
             }
 
-            // Si es ERROR, mostrarlo también en el feed principal y alertas
-            if (event.log?.level === 'ERROR' || event.log?.level === 'WARNING') {
-                const rawMsg = event.log?.message ?? 'Error en agente';
+            if (isOnline && adspowerStatus !== 'online') {
+                setAdspowerStatus('online');
+                setEvents(prev => [{
+                    id: `ws-adspower-on-${Date.now()}`,
+                    type: 'SUCCESS',
+                    message: '🟢 AdsPower operativo nuevamente',
+                    source: `Computer #${event.computer_id}`,
+                    timestamp: new Date().toLocaleTimeString(),
+                    meta: { raw: rawMsg },
+                }, ...prev.slice(0, 18)]);
+                fetchData();
+                return;
+            }
 
-                // Clasificar el error para mensaje amigable
-                const friendlyMsg = rawMsg.includes('AdsPower no está disponible') || rawMsg.includes('ADSPOWER_OFFLINE')
-                    ? '🔴 AdsPower no disponible — abre la aplicación en el agente'
-                    : rawMsg.includes('Proxy inválido') || rawMsg.includes('PROXY_INVALID') || rawMsg.includes('Check Proxy')
+            // Mensajes de error o warning normales (otros logs)
+            if (event.log?.level === 'ERROR' || event.log?.level === 'WARNING') {
+                const friendlyMsg =
+                    cleanMsg.includes('proxy inválido') || cleanMsg.includes('proxy_invalid') || cleanMsg.includes('check proxy')
                         ? '🔴 Proxy inválido o caído — ejecuta rotación de proxies'
-                        : rawMsg.includes('Timeout') || rawMsg.includes('TIMEOUT')
+                        : cleanMsg.includes('timeout') || cleanMsg.includes('time out')
                             ? '🟡 Timeout abriendo navegador — AdsPower tardó demasiado'
-                            : rawMsg.includes('Profile does not exist') || rawMsg.includes('PROFILE_NOT_FOUND')
+                            : cleanMsg.includes('profile does not exist') || cleanMsg.includes('profile_not_found')
                                 ? '🔴 Perfil no encontrado en AdsPower — puede haber sido eliminado'
-                                : rawMsg;
+                                : cleanAgentError(msg); // ← ESTE ES EL CAMBIO para formatear correcto el msg
 
                 setEvents(prev => [{
                     id: `ws-log-${Date.now()}`,
-                    type: event.log?.level === 'ERROR' ? 'ERROR' as const : 'INFO' as const,
+                    type: event.log?.level === 'ERROR' ? 'ERROR' : 'INFO',
                     message: friendlyMsg,
                     source: `Computer #${event.computer_id}`,
                     timestamp: new Date().toLocaleTimeString(),
-                    meta: { raw: rawMsg }, // guardamos el original por si necesitan ver causa
+                    meta: { raw: rawMsg },
                 }, ...prev.slice(0, 18)]);
 
                 if (event.log?.level === 'ERROR') {
                     setAlerts(prev => [{
                         id: Date.now(),
-                        type: 'ERROR' as const,
+                        type: 'ERROR',
                         message: friendlyMsg,
                         source: `agent-${event.computer_id}`,
                         read: false,
                         timestamp: new Date().toLocaleTimeString(),
                     }, ...prev]);
-                    // ← AGREGAR: actualizar contador de stats
+
                     setStats(prev => prev ? {
                         ...prev,
                         alertsActive: (prev.alertsActive ?? 0) + 1
@@ -294,7 +375,7 @@ const OrchestratorTerminal: React.FC = () => {
                 type: event.adspower_id ? 'SUCCESS' as const : 'ERROR' as const,
                 message: event.adspower_id
                     ? `✅ Perfil creado en AdsPower — ${name}`
-                    : `❌ Error creando perfil — ${name}`,
+                    : `Iniciando creación de perfil — ${name}`,
                 source: `agent-${event.computer_id ?? 1}`,
                 timestamp: new Date().toLocaleTimeString(),
                 meta: {},
@@ -315,7 +396,21 @@ const OrchestratorTerminal: React.FC = () => {
             setEvents(prev => [{
                 id: `ws-profile-ready-${Date.now()}`,
                 type: 'SUCCESS' as const,
-                message: `✅ Perfil listo — ${event.adspower_id}`,
+                message: `✅ Perfil listo — ${event.name}`,
+                source: `agent-${event.computer_id ?? 1}`,
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 18)]);
+            if (autoRefreshRef.current) fetchData();
+            return;
+        }
+        if (event.type === 'profile_deleted') {
+            const name = event.name ?? `Perfil #${event.profile_id}`;
+            setProfiles(prev => prev.filter(p => p.id !== event.profile_id?.toString()));
+            setEvents(prev => [{
+                id: `ws-profile-del-${Date.now()}`,
+                type: 'INFO' as const,
+                message: `🗑️ Perfil eliminado — ${name}`,
                 source: `agent-${event.computer_id ?? 1}`,
                 timestamp: new Date().toLocaleTimeString(),
                 meta: {},
@@ -376,11 +471,37 @@ const OrchestratorTerminal: React.FC = () => {
             return;
         }
 
-        if (event.type === 'session_created' || event.type === 'session_active') {
+        if (event.type === 'session_created') {
+            setEvents(prev => [{
+                id: `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                type: 'INFO' as const,
+                message: event.message ?? `Sesión creada — ${event.profile}`,
+                source: event.agent_name ?? 'Agent',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: { session_id: event.session_id },
+            }, ...prev.slice(0, 18)]);
+
+            // Actualizar KPI optimistamente — sin esperar REST
+            setStats(prev => ({
+                nodesOnline: prev?.nodesOnline ?? 1,
+                nodesTotal: prev?.nodesTotal ?? 1,
+                profilesActive: (prev?.profilesActive ?? 0) + 1,
+                browsersOpen: (prev?.browsersOpen ?? 0) + 1,
+                alertsActive: prev?.alertsActive ?? 0,
+                healthScore: prev?.healthScore ?? 100,
+                healthRisks: prev?.healthRisks ?? [],
+            }));
+
+            // Fetch tardío para sincronizar con BD
+            if (autoRefreshRef.current) setTimeout(() => fetchData(), 3000);
+            return;
+        }
+
+        if (event.type === 'session_active') {
             setEvents(prev => [{
                 id: `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                 type: 'SUCCESS' as const,
-                message: event.message ?? `Sesión creada — ${event.profile}`,
+                message: event.message ?? `Sesión activa — ${event.profile}`,
                 source: event.agent_name ?? 'Agent',
                 timestamp: new Date().toLocaleTimeString(),
                 meta: { session_id: event.session_id },
@@ -406,7 +527,7 @@ const OrchestratorTerminal: React.FC = () => {
             setEvents(prev => [{
                 id: `ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                 type: 'INFO' as const,
-                message: `Sesión cerrada — Perfil #${event.profile_id ?? 'None'} - ${event.duration_seconds ?? 0}s, ${(event.total_data_mb ?? 0).toFixed(1)}MB`,
+                message: `Sesión cerrada — ${event.profile_name ?? `Perfil #${event.profile}`}: - ${event.duration_seconds ?? 0}s, ${(event.total_data_mb ?? 0).toFixed(1)}MB`,
                 source: event.agent_name ?? 'Agent',
                 timestamp: new Date().toLocaleTimeString(),
                 meta: { session_id: event.session_id },
@@ -427,8 +548,105 @@ const OrchestratorTerminal: React.FC = () => {
             if (autoRefreshRef.current) setTimeout(() => fetchData(), 3000);
             return;
         }
+        if (event.type === 'proxy_task_failed') {
+            setTaskQueue(prev => ({ ...prev, failed: prev.failed + 1 }));
+            setProxyTasks(prev => [{
+                id: event.alert_id,
+                profileName: event.profile_name,
+                status: 'failed',
+                message: event.message,
+                timestamp: event.timestamp,
+            }, ...prev.slice(0, 19)]);
+
+            setAlerts(prev => [{
+                id: event.alert_id,
+                type: 'Proxy Caído',
+                message: event.message,
+                severity: 'Critical' as const,
+                time: 'ahora',
+                read: false,
+            }, ...prev]);
+
+            setStats(prev => prev ? { ...prev, alertsActive: (prev.alertsActive ?? 0) + 1 } : prev);
+            return;
+        }
+
+        if (event.type === 'proxy_rotation_started') {
+            // Pasar de fallida → procesando
+            setTaskQueue(prev => ({
+                ...prev,
+                failed: Math.max(0, prev.failed - 1),
+                processing: prev.processing + 1,
+            }));
+            setProxyTasks(prev => prev.map(t =>
+                t.id === event.alert_id ? { ...t, status: 'processing', message: event.message } : t
+            ));
+
+            setEvents(prev => [{
+                id: `ws-proxyrot-start-${Date.now()}`,
+                type: 'INFO' as const,
+                message: `🔄 ${event.message}`,
+                source: `Computer #${event.computer_id ?? 1}`,
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 18)]);
+            return;
+        }
+
+        if (event.type === 'proxy_rotation_resolved') {
+            setTaskQueue(prev => ({ ...prev, processing: Math.max(0, prev.processing - 1) }));
+            setProxyTasks(prev => prev.map(t =>
+                t.id === event.alert_id ? { ...t, status: 'resolved' as const, message: event.message } : t
+            ));
+
+            // Resolver tanto por alert_id como por profile_id
+            setAlerts(prev => prev.map(a =>
+                (a.id === event.alert_id ||
+                    (a as any).profile_id === event.profile_id)
+                    ? { ...a, read: true }
+                    : a
+            ));
+            setStats(prev => prev ? {
+                ...prev, alertsActive: Math.max(0, (prev.alertsActive ?? 0) - 1)
+            } : prev);
+
+            setEvents(prev => [{
+                id: `ws-proxyrot-ok-${Date.now()}`,
+                type: 'SUCCESS' as const,
+                message: `✅ ${event.message}`,
+                source: 'auto_rotation',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 18)]);
+
+            if (autoRefreshRef.current) setTimeout(() => fetchData(), 2000);
+            return;
+        }
+
+        if (event.type === 'proxy_rotation_failed') {
+            // Sigue en fallida
+            setTaskQueue(prev => ({
+                ...prev,
+                processing: Math.max(0, prev.processing - 1),
+                failed: prev.failed + 1,
+            }));
+            setProxyTasks(prev => prev.map(t =>
+                t.id === event.alert_id ? { ...t, status: 'failed', message: event.message } : t
+            ));
+
+            setEvents(prev => [{
+                id: `ws-proxyrot-fail-${Date.now()}`,
+                type: 'ERROR' as const,
+                message: `❌ ${event.message}`,
+                source: 'auto_rotation',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 18)]);
+            return;
+        }
 
         if (event.type === 'session_crashed') {
+            const isProxyError = event.is_proxy_error === true;
             const reason = event.crash_reason ?? 'Error desconocido';
             const friendlyReason = reason.includes('Proxy') || reason.includes('Check Proxy')
                 ? '🔴 Proxy inválido o caído'
@@ -441,25 +659,24 @@ const OrchestratorTerminal: React.FC = () => {
             setEvents(prev => [{
                 id: `ws-crash-${Date.now()}`,
                 type: 'ERROR' as const,
-                message: `Sesión crasheó — ${event.profile_name ?? `Perfil #${event.profile_id}`}: ${friendlyReason}`,
+                message: `Sesión crasheó — ${event.profile_name ?? `Perfil #${event.profile}`}: ${friendlyReason}`,
                 source: event.agent_name ?? 'Agent',
                 timestamp: new Date().toLocaleTimeString(),
                 meta: { session_id: event.session_id },
             }, ...prev.slice(0, 18)]);
 
-            setAlerts(prev => [{
-                id: Date.now(),
-                type: 'ERROR' as const,
-                message: `Sesión crasheó — ${friendlyReason}`,
-                source: `agent-${event.computer_id}`,
-                read: false,
-                timestamp: new Date().toLocaleTimeString(),
-            }, ...prev]);
-
-            setStats(prev => prev ? {
-                ...prev,
-                alertsActive: (prev.alertsActive ?? 0) + 1
-            } : prev);
+            // ← Solo crear alerta si NO es proxy error (el proxy error lo maneja proxy_task_failed)
+            if (!isProxyError) {
+                setAlerts(prev => [{
+                    id: Date.now(),
+                    type: 'Sesión Crasheó',
+                    message: friendlyReason,
+                    severity: 'Critical' as const,
+                    time: 'ahora',
+                    read: false,
+                }, ...prev]);
+                setStats(prev => prev ? { ...prev, alertsActive: (prev.alertsActive ?? 0) + 1 } : prev);
+            }
 
             if (autoRefreshRef.current) setTimeout(() => fetchData(), 2000);
             return;
@@ -468,7 +685,7 @@ const OrchestratorTerminal: React.FC = () => {
         if (event.type === 'system_event' && event.event === 'verify_profiles_start') {
             setEvents(prev => prev.map(e =>
                 e.id === 'ws-verify-active'
-                    ? { ...e, message: `🔍 Verificando ${event.stats?.total ?? ''} perfiles — en proceso...` }
+                    ? { ...e, message: `Verificando ${event.stats?.total ?? ''} perfiles — en proceso...` }
                     : e
             ));
             return;
@@ -614,10 +831,11 @@ const OrchestratorTerminal: React.FC = () => {
         }
     }, [setSelectedConn]);
 
-    const handleStartSessions = async (selectedIds: string[]) => {
+    const handleStartSessions = async (selectedIds: string[], targetUrl: string) => {
         const computer = nodes.find(n => n.id === selectedComputerId && n.status === 'ONLINE')
             ?? nodes.find(n => n.status === 'ONLINE');
         if (!computer) { alert('No hay agentes online'); return; }
+
         const results = await Promise.allSettled(
             selectedIds.map(id => {
                 const p = profiles.find(prof => prof.id === id);
@@ -628,7 +846,7 @@ const OrchestratorTerminal: React.FC = () => {
                 return orchestratorService.openBrowser({
                     profileAdsId: p.adsId,
                     computerId: parseInt(computer.id),
-                    targetUrl: 'https://www.google.com',
+                    targetUrl,        // ← usa la URL recibida del modal
                     agentName: 'admin-panel',
                 });
             })
@@ -651,28 +869,73 @@ const OrchestratorTerminal: React.FC = () => {
         const ok = results.filter(r => r.status === 'fulfilled').length;
         const failed = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
 
-        if (failed.length > 0) {
-            const reasons = failed.map(f => f.reason?.message ?? 'Error desconocido').join('\n');
-            alert(`❌ ${failed.length} sesión(es) fallaron:\n${reasons}`);
-        }
+        // Éxitos → timeline
         if (ok > 0) {
-            alert(`⏳ ${ok} sesión(es) enviadas al agente — revisa la línea de tiempo.`);
+            setEvents(prev => [{
+                id: `ws-session-sent-${Date.now()}`,
+                type: 'INFO' as const,
+                message: `⏳ ${ok} sesión(es) enviadas al agente`,
+                source: 'admin-panel',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 29)]);
         }
+
+        // Errores → timeline + alerta + contador fallidos
+        failed.forEach((f, i) => {
+            const p = profiles.find(prof => prof.id === selectedIds[i]);
+            const reason = f.reason?.message ?? 'Error desconocido';
+            const msg = `❌ Error abriendo "${p?.name ?? 'perfil'}": ${reason}`;
+
+            // Timeline
+            setEvents(prev => [{
+                id: `ws-open-error-${Date.now()}-${i}`,
+                type: 'ERROR' as const,
+                message: msg,
+                source: 'admin-panel',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 29)]);
+
+            // Alerta activa (persiste hasta que se resuelva)
+            setAlerts(prev => [{
+                id: Date.now() + i,
+                type: 'ERROR' as const,
+                message: msg,
+                source: 'admin-panel',
+                severity: 'Critical' as const,
+                time: 'ahora',
+                read: false,
+            }, ...prev]);
+
+            // Contador KPI
+            setStats(prev => prev ? { ...prev, alertsActive: (prev.alertsActive ?? 0) + 1 } : prev);
+        });
+
         setShowSessionModal(false);
-        fetchData();
+        if (ok > 0 || failed.length > 0) setTimeout(() => fetchData(), 2000);
     };
 
     const handleVerifyProfile = async (profileId: string) => {
         try {
             const r = await orchestratorService.verifyProfileSecurity(profileId);
             setProfiles(prev => prev.map(p => p.id === profileId
-                ? { ...p, browserScore: r.browser_score, fingerprintScore: r.fingerprint_score, cookieStatus: r.cookie_status }
+                ? {
+                    ...p,
+                    browserScore:     r.browser_score,
+                    fingerprintScore: r.fingerprint_score,
+                    cookieStatus:     r.cookie_status,
+                    verifyResult:     r,
+                }
                 : p
             ));
-            alert(`Verificado ✓  Browser: ${r.browser_score}%  |  Cookies: ${r.cookie_status}`);
-            setSecurityProfile(null);
-        } catch {
-            alert('Error al verificar perfil.');
+            // Actualizar el modal para que muestre el resultado detallado sin cerrarlo
+            setSecurityProfile(prev => prev?.id === profileId
+                ? { ...prev, browserScore: r.browser_score, fingerprintScore: r.fingerprint_score, cookieStatus: r.cookie_status, verifyResult: r }
+                : prev
+            );
+        } catch (err: any) {
+            alert(`Error al verificar perfil: ${err.message}`);
         }
     };
 
@@ -702,6 +965,67 @@ const OrchestratorTerminal: React.FC = () => {
         setAlerts(prev => prev.map(a => a.id === id ? { ...a, read: true } : a));
         alert('Alerta silenciada 30m');
     };
+    const handleDeleteProfile = useCallback(async (profileId: string) => {
+        const profile = profiles.find(p => p.id === profileId);
+        if (!profile) return;
+
+        const confirmed = window.confirm(
+            `¿Eliminar el perfil "${profile.name}"?\n\nEsto eliminará:\n• El perfil en la base de datos\n• El proxy asignado\n• El perfil en AdsPower\n\nEsta acción no se puede deshacer.`
+        );
+        if (!confirmed) return;
+
+        // Optimista: quitar de la lista de inmediato
+        setProfiles(prev => prev.filter(p => p.id !== profileId));
+
+        // Evento en timeline
+        setEvents(prev => [{
+            id: `ws-deleting-${Date.now()}`,
+            type: 'INFO' as const,
+            message: `🗑️ Eliminando perfil "${profile.name}"...`,
+            source: 'admin-panel',
+            timestamp: new Date().toLocaleTimeString(),
+            meta: {},
+        }, ...prev.slice(0, 29)]);
+
+        try {
+            await orchestratorService.deleteProfile(profileId);
+
+            setEvents(prev => [{
+                id: `ws-deleted-${Date.now()}`,
+                type: 'SUCCESS' as const,
+                message: `✅ Perfil "${profile.name}" eliminado correctamente`,
+                source: 'admin-panel',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 29)]);
+
+            setTimeout(() => fetchData(), 1500);
+        } catch (err: any) {
+            // Rollback: restaurar perfil en la lista
+            setProfiles(prev => [...prev, profile].sort((a, b) => Number(a.id) - Number(b.id)));
+
+            setEvents(prev => [{
+                id: `ws-delete-error-${Date.now()}`,
+                type: 'ERROR' as const,
+                message: `❌ Error eliminando "${profile.name}": ${err.message}`,
+                source: 'admin-panel',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 29)]);
+
+            setAlerts(prev => [{
+                id: Date.now(),
+                type: 'ERROR' as const,
+                message: `Error eliminando perfil "${profile.name}": ${err.message}`,
+                source: 'admin-panel',
+                severity: 'Critical' as const,
+                time: 'ahora',
+                read: false,
+            }, ...prev]);
+
+            setStats(prev => prev ? { ...prev, alertsActive: (prev.alertsActive ?? 0) + 1 } : prev);
+        }
+    }, [profiles, setProfiles, setEvents, setAlerts, setStats, fetchData]);
 
     const handleTriggerBackup = async () => {
         try { await orchestratorService.triggerBackup(); alert('Backup encolado'); }
@@ -727,6 +1051,44 @@ const OrchestratorTerminal: React.FC = () => {
             alert('Error proxies');
         }
     };
+
+    // const handleRotateProxyForProfile = async (profileId: string) => {
+    //     const profile = profiles.find(p => p.id === profileId);
+    //     if (!profile) return;
+
+    //     // Optimista: evento en timeline
+    //     setEvents(prev => [{
+    //         id: `ws-manual-rotate-${Date.now()}`,
+    //         type: 'INFO' as const,
+    //         message: `🔄 Rotando proxy de "${profile.name}"...`,
+    //         source: 'admin-panel',
+    //         timestamp: new Date().toLocaleTimeString(),
+    //         meta: {},
+    //     }, ...prev.slice(0, 29)]);
+
+    //     try {
+    //         const result = await orchestratorService.rotateProxyForProfile(profileId);
+    //         setEvents(prev => [{
+    //             id: `ws-manual-rotate-ok-${Date.now()}`,
+    //             type: 'SUCCESS' as const,
+    //             message: `✅ Proxy rotado — "${profile.name}" → ${result.new_city ?? 'nueva sesión'}`,
+    //             source: 'admin-panel',
+    //             timestamp: new Date().toLocaleTimeString(),
+    //             meta: {},
+    //         }, ...prev.slice(0, 29)]);
+    //         // Actualizar tabla tras 2s
+    //         setTimeout(() => fetchData(), 2000);
+    //     } catch (err: any) {
+    //         setEvents(prev => [{
+    //             id: `ws-manual-rotate-err-${Date.now()}`,
+    //             type: 'ERROR' as const,
+    //             message: `❌ Error rotando proxy de "${profile.name}": ${err.message}`,
+    //             source: 'admin-panel',
+    //             timestamp: new Date().toLocaleTimeString(),
+    //             meta: {},
+    //         }, ...prev.slice(0, 29)]);
+    //     }
+    // };
 
     // ─── RENDER ──────────────────────────────────────────────────
     return (
@@ -806,15 +1168,11 @@ const OrchestratorTerminal: React.FC = () => {
                                         <h2 className="text-xl font-black text-white italic tracking-tight">Panel de Control</h2>
                                         <p className="text-xs text-[#666]">Vista general del estado de la infraestructura.</p>
                                     </div>
-                                    <button onClick={() => setShowDashFilters(true)} className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg text-xs font-bold text-[#ccc] hover:text-white hover:bg-white/10 transition-colors">
-                                        <Filter size={14} /> Filtros
-                                        {dashFilters.severity !== 'ALL' && <span className="size-1.5 rounded-full bg-[#00ff88]" />}
-                                    </button>
                                 </div>
 
                                 <section className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                                     <div className="lg:col-span-2">                                    <GlobalStatusHero
-                                        status={(stats?.healthScore || 0) > 80 ? 'OK' : 'DEGRADED'}
+                                        status={(stats?.healthScore || 0) > 75 ? 'OK' : 'DEGRADED'}
                                         lastUpdate="2s"
                                         autoRefresh={autoRefresh}
                                         onToggleAuto={() => setAutoRefresh(v => !v)}
@@ -832,9 +1190,9 @@ const OrchestratorTerminal: React.FC = () => {
                                     </div>
                                     <div className="lg:col-span-1 h-full">
                                         <JobsQueueWidget
-                                            queue={stats?.pendingProfiles ?? 0}
-                                            running={(stats?.browsersOpen ?? 0) + (rotationInProgress ? 1 : 0)}
-                                            failed={alerts.filter(a => !a.read && a.source !== 'proxy_rotation').length}
+                                            queue={taskQueue.queue}
+                                            running={taskQueue.processing + (rotationInProgress ? 1 : 0)}
+                                            failed={taskQueue.failed}
                                             onClick={() => setShowJobQueue(true)}
                                         />
                                     </div>
@@ -929,12 +1287,25 @@ const OrchestratorTerminal: React.FC = () => {
                                                     setEvents(prev => [{
                                                         id: 'ws-verify-active',
                                                         type: 'INFO' as const,
-                                                        message: '🔍 Verificando perfiles — en proceso...',
+                                                        message: 'Verificando perfiles — en proceso...',
                                                         source: 'verify_profiles',
                                                         timestamp: new Date().toLocaleTimeString(),
                                                         meta: {},
                                                     }, ...prev.slice(0, 18)]);
-                                                    await orchestratorService.verifyAllProfiles(selectedComputerId ?? undefined);
+                                                    try {
+                                                        await orchestratorService.verifyAllProfiles(selectedComputerId ?? undefined);
+                                                    } catch (err: any) {
+                                                        setVerifyInProgress(false);
+                                                        setActiveAction(null);
+                                                        setEvents(prev => [{
+                                                            id: 'ws-verify-error',
+                                                            type: 'ERROR' as const,
+                                                            message: `❌ Error al iniciar verificación: ${err.message}`,
+                                                            source: 'verify_profiles',
+                                                            timestamp: new Date().toLocaleTimeString(),
+                                                            meta: {},
+                                                        }, ...prev.filter(e => e.id !== 'ws-verify-active').slice(0, 17)]);
+                                                    }
                                                 }
                                             },
                                         ] as const).map(({ id, label, desc, icon, color, fn }) => (<div key={label} onClick={fn} className={`group cursor-pointer bg-[#0a0a0a] border border-white/5 hover:border-white/20 p-4 rounded-xl transition-all relative overflow-hidden ${(id === 'rotation' && rotationInProgress) || (id === 'verify' && verifyInProgress) ? 'opacity-60 cursor-not-allowed' : ''}`}>
@@ -1012,10 +1383,12 @@ const OrchestratorTerminal: React.FC = () => {
                                                     {(visibleContent as ProfileItem[]).map(p => (
                                                         <ProfileRow
                                                             key={p.id}
-                                                            profile={p}
-                                                            connections={connections}
-                                                            onHistory={() => handleViewProfileHistory(p.id)}
+                                                                 profile={p}
+                                                                 connections={connections}
+                                                                 onHistory={() => handleViewProfileHistory(p.id)}
                                                             onSecurity={() => setSecurityProfile(p)}
+                                                            onDelete={() => handleDeleteProfile(p.id)}
+
                                                         />
                                                     ))}
                                                 </div>
@@ -1071,10 +1444,17 @@ const OrchestratorTerminal: React.FC = () => {
                 <JobQueueModal
                     isOpen={showJobQueue}
                     onClose={() => setShowJobQueue(false)}
-                    queue={stats?.pendingProfiles ?? 0}
-                    running={(stats?.browsersOpen ?? 0) + (rotationInProgress ? 1 : 0)}
-                    failed={alerts.filter(a => !a.read && a.source !== 'proxy_rotation').length}
-                    pendingProfiles={profiles.filter(p => (p as any).status === 'IDLE' && p.adsId?.startsWith('pending'))}
+                    queue={taskQueue.queue}
+                    running={taskQueue.processing}
+                    failed={taskQueue.failed}
+                    pendingProfiles={proxyTasks
+                        .filter(t => t.status !== 'resolved')
+                        .map(t => ({
+                            id: t.id,
+                            name: t.profileName,
+                            status: t.status === 'processing' ? '⏳ Rotando proxy...' : '❌ Proxy caído',
+                        }))
+                    }
                 />
                 <NodeItemDrawer
                     node={liveSelectedNode}
@@ -1087,27 +1467,12 @@ const OrchestratorTerminal: React.FC = () => {
                     onClose={() => setSelectedAlert(null)}
                     onAck={handleAlertAck}
                 />
-                <DashFiltersDrawer
-                    isOpen={showDashFilters}
-                    onClose={() => setShowDashFilters(false)}
-                    filters={dashFilters}
-                    setFilters={setDashFilters}
-                    onReset={() => setDashFilters({ timeRange: '1h', severity: 'ALL', owner: 'ALL', cookieStatus: 'ALL' })}
-                />
                 <DashKPIModal
                     type={dashModal.type}
                     data={dashModal.data}
                     onClose={() => setDashModal({ type: null, data: null })}
                 />
-                <HealthDetailModal
-                    isOpen={showHealthDetail}
-                    score={stats?.healthScore || 0}
-                    onClose={() => setShowHealthDetail(false)}
-                />
-                <ServiceDetailModal
-                    service={selectedService}
-                    onClose={() => setSelectedService(null)}
-                />
+
                 <SecurityCheckModal
                     profile={securityProfile}
                     onClose={() => setSecurityProfile(null)}
@@ -1132,14 +1497,39 @@ const OrchestratorTerminal: React.FC = () => {
                         try {
                             await orchestratorService.createProfile(data);
                             const agentOnline = nodes.some(n => n.status === 'ONLINE');
-                            alert(agentOnline
-                                ? `✅ Perfil "${data.name}" creado y enviado al agente.`
-                                : `⏳ Perfil "${data.name}" en cola — se creará cuando el agente se conecte.`
-                            );
+
+                            // Agregar inmediatamente a timeline sin esperar WS
+                            setEvents(prev => [{
+                                id: `ws-profile-creating-${Date.now()}`,
+                                type: agentOnline ? 'INFO' as const : 'WARNING' as const,
+                                message: agentOnline
+                                    ? `🆕 Creando perfil "${data.name}" — enviado al agente`
+                                    : `⏳ Perfil "${data.name}" en cola — agente offline`,
+                                source: 'admin-panel',
+                                timestamp: new Date().toLocaleTimeString(),
+                                meta: {},
+                            }, ...prev.slice(0, 29)]);
+
                             setShowCreateProfile(false);
-                            fetchData();
+                            setTimeout(() => fetchData(), 1500);
                         } catch {
-                            alert('Error al crear el perfil.');
+                            setEvents(prev => [{
+                                id: `ws-profile-error-${Date.now()}`,
+                                type: 'ERROR' as const,
+                                message: `❌ Error creando perfil"${data.name}"`,
+                                source: 'admin-panel',
+                                timestamp: new Date().toLocaleTimeString(),
+                                meta: {},
+                            }, ...prev.slice(0, 29)]);
+                            setAlerts(prev => [{
+                                id: Date.now(),
+                                type: 'ERROR' as const,
+                                message: `Error creando perfil "${data.name}"`,
+                                source: 'admin-panel',
+                                severity: 'Critical' as const,
+                                time: 'ahora',
+                                read: false,
+                            }, ...prev]);
                         }
                     }}
                 />

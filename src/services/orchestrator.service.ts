@@ -21,40 +21,65 @@ const API = '/api/v1';
 const fetchJSON = async (url: string, options?: RequestInit) => {
   const res = await fetch(url, options);
   if (!res.ok) throw new Error(`${res.status} ${url}`);
+  // 204 No Content no tiene body — no intentar parsear JSON
+  if (res.status === 204 || res.headers.get("content-length") === "0")
+    return null;
   return res.json();
 };
 
-
 class OrchestratorService {
-
   async getDashboardStats() {
-    const [metrics, computers, alerts, adminDash, profiles, health, proxyStats] = await Promise.all([
+    const [
+      metrics,
+      computers,
+      alerts,
+      adminDash,
+      profiles,
+      health,
+      proxyStats,
+    ] = await Promise.all([
       fetchJSON(`${API}/metrics/dashboard`),
       fetchJSON(`${API}/computers/with-metrics`),
       fetchJSON(`${API}/alerts/?status=active&limit=100`),
       fetchJSON(`${API}/admin/dashboard`),
       fetchJSON(`${API}/profiles/?limit=500`),
       fetchJSON(`${API}/health/system`).catch(() => ({ components: {} })),
-      fetchJSON(`${API}/proxy-rotation/stats`).catch(() => ({ avg_latency_ms: 0, avg_success_rate: 0 })),
+      fetchJSON(`${API}/proxy-rotation/stats`).catch(() => ({
+        avg_latency_ms: 0,
+        avg_success_rate: 0,
+      })),
     ]);
 
-    const onlineComputers = computers.items.filter((c: any) => c.status === 'ONLINE').length;
+    const onlineComputers = computers.items.filter(
+      (c: any) => c.status === "ONLINE",
+    ).length;
     const { score: healthScore, details: healthDetails } = _computeHealth(
-      computers.items, alerts.items, health.components, proxyStats, adminDash.active_sessions ?? 0
+      computers.items,
+      alerts.items,
+      health.components,
+      proxyStats,
+      adminDash.active_sessions ?? 0,
     );
-    const pendingProfiles = profiles.items.filter((p: any) => p.status === 'creating').length;
+    const pendingProfiles = profiles.items.filter(
+      (p: any) => p.status === "creating",
+    ).length;
 
     return {
-      nodesOnline:    onlineComputers,
-      nodesTotal:     computers.total,
+      nodesOnline: onlineComputers,
+      nodesTotal: computers.total,
       profilesActive: adminDash.active_sessions,
-      profilesTotal:  metrics.profiles?.total ?? 0,
-      browsersOpen:   adminDash.active_sessions,
-      alertsActive:   alerts.total,
+      profilesTotal: metrics.profiles?.total ?? 0,
+      browsersOpen: adminDash.active_sessions,
+      alertsActive: alerts.total,
       pendingProfiles,
       healthScore,
       healthDetails,
-      healthRisks: _extractRisks(computers.items, alerts.items, health.components, proxyStats),
+      healthRisks: _extractRisks(
+        computers.items,
+        alerts.items,
+        health.components,
+        proxyStats,
+      ),
     };
   }
 
@@ -84,7 +109,11 @@ class OrchestratorService {
         : null,
     }));
   }
-
+  async getSessionPages(sessionId: number) {
+    const data = await fetchJSON(`${API}/admin/sessions/${sessionId}/pages`);
+    // Acepta { pages: [] } o array directo
+    return Array.isArray(data) ? data : (data.pages ?? data.items ?? []);
+  }
   async getNodeHistory(nodeId: string) {
     const data = await fetchJSON(`${API}/computers/${nodeId}/metrics?hours=2`);
 
@@ -139,14 +168,18 @@ class OrchestratorService {
   }
 
   async getServicesStatus() {
-    const [health, proxyStats] = await Promise.all([
+    const [health, proxyStats, soaxCheck] = await Promise.all([
       fetchJSON(`${API}/health/system`),
       fetchJSON(`${API}/proxy-rotation/stats`).catch(() => ({
         avg_latency_ms: 0,
         avg_success_rate: 0,
       })),
+      // Verificar SOAX real: si devuelve ciudades = funciona, si no = roto
+      fetchJSON(`${API}/proxies/soax/cities?country=es`).catch(() => ({
+        cities: [],
+      })),
     ]);
-    return mapServices(health.components, proxyStats);
+    return mapServices(health.components, proxyStats, soaxCheck.cities ?? []);
   }
 
   async getConnections() {
@@ -188,6 +221,12 @@ class OrchestratorService {
       method: "POST",
     });
   }
+
+  // async rotateProxyForProfile(profileId: string) {
+  //   return fetchJSON(`${API}/proxy-rotation/profile/${profileId}/rotate`, {
+  //     method: "POST",
+  //   });
+  // }
 
   async openBrowser(params: {
     profileAdsId: string;
@@ -273,7 +312,9 @@ class OrchestratorService {
   async getProfileHistory(profileId: string) {
     return fetchJSON(`${API}/admin/sessions/by-profile/${profileId}?limit=20`);
   }
-
+  async deleteProfile(profileId: string) {
+    return fetchJSON(`${API}/profiles/${profileId}`, { method: "DELETE" });
+  }
   async getActiveSessions() {
     return fetchJSON(`${API}/admin/sessions/active`);
   }
@@ -326,20 +367,39 @@ function mapAlert(a: any) {
   };
 }
 
-function mapServices(components: any, proxyStats?: any) {
-  const proxySuccessRate = proxyStats?.avg_success_rate ?? 0;
-  const soaxOnline = proxySuccessRate > 50;
-  const soaxLatency = Math.round(proxyStats?.avg_latency_ms ?? 0);
-
+// ─── mapServices ─────────────────────────────────────────────────────────────
+// Cambios:
+// - usa avg_success_rate directo del backend (ya calculado arriba)
+// - lógica de Proxies y SOAX más clara y menos frágil
+// - sin doble penalización latencia (ya la aplica _computeHealth)
+ 
+function mapServices(components: any, proxyStats?: any, soaxCities: string[] = []) {
+  const avgLatency    = Math.round(proxyStats?.avg_latency_ms    ?? 0);
+  const successRate   = proxyStats?.avg_success_rate != null
+    ? Number(proxyStats.avg_success_rate)
+    : -1;   // -1 = sin datos aún
+ 
+  // Proxies: ONLINE si success_rate >= 60% o aún no hay datos de check
+  const proxiesOnline =
+    successRate === -1
+      ? (proxyStats?.active ?? 0) > 0          // sin historial → hay proxies activos
+      : successRate >= 60 && avgLatency < 3000; // con historial → umbral real
+ 
+  // SOAX API: ONLINE si devuelve ciudades
+  const soaxOnline = soaxCities.length > 0;
+ 
+  const agentsOnline = (components?.computers?.online ?? 0) > 0;
+ 
   return [
-    { name: 'Database', status: components?.database?.healthy  ? 'ONLINE' : 'DEGRADED', latency: 2,           lastCheck: 'now' },
-    { name: 'Redis',    status: components?.redis?.healthy     ? 'ONLINE' : 'DEGRADED', latency: 1,           lastCheck: 'now' },
-    { name: 'Proxies',  status: proxySuccessRate > 70          ? 'ONLINE' : 'DEGRADED', latency: soaxLatency, lastCheck: 'now' },
-    { name: 'Agents',   status: components?.computers?.online > 0 ? 'ONLINE' : 'DEGRADED', latency: 45,      lastCheck: 'now' },
-    { name: 'AdsPower', status: components?.adspower?.healthy  ? 'ONLINE' : 'DEGRADED', latency: 0,           lastCheck: 'now' },
-    { name: 'SOAX',     status: soaxOnline                     ? 'ONLINE' : 'DEGRADED', latency: soaxLatency, lastCheck: 'now' },
+    { name: 'Database', status: components?.database?.healthy ? 'ONLINE' : 'DEGRADED', latency: 0,          lastCheck: 'now' },
+    { name: 'Redis',    status: components?.redis?.healthy     ? 'ONLINE' : 'DEGRADED', latency: 0,          lastCheck: 'now' },
+    { name: 'Proxies',  status: proxiesOnline                  ? 'ONLINE' : 'DEGRADED', latency: avgLatency, lastCheck: 'now' },
+    { name: 'Agents',   status: agentsOnline                   ? 'ONLINE' : 'DEGRADED', latency: 0,          lastCheck: 'now' },
+    { name: 'AdsPower', status: components?.adspower?.healthy  ? 'ONLINE' : 'DEGRADED', latency: 0,          lastCheck: 'now' },
+    { name: 'SOAX',     status: soaxOnline                     ? 'ONLINE' : 'DEGRADED', latency: 0,          lastCheck: 'now' },
   ];
 }
+ 
 
 function mapProxy(p: any) {
   return {
@@ -360,55 +420,79 @@ function mapProfileStatus(s: string) {
 
 // ─── REEMPLAZAR _computeHealth ───────────────────────────────────────────────
 
+// ─── _computeHealth ─────────────────────────────────────────────────────────
+// Cambios:
+// - proxyScore ahora usa avg_success_rate real desde BD
+// - hasRotationData usa `total` (total proxies) en vez del inexistente `total_checks`
+// - penalización de latencia más fina (3 niveles)
+// - nodeScore mínimo bajado de 70 a 50 (más honesto cuando hay muchos nodos offline)
+ 
 function _computeHealth(
   nodes: any[], alerts: any[],
   components: any = {}, proxyStats: any = {},
   activeSessions = 0,
 ): { score: number; details: import('../types/orchestratorTypes').HealthDetails } {
-
+ 
   // 1. NODE SCORE (30%)
   const nodesOnline = nodes.filter(n => n.status === 'ONLINE').length;
   const nodesTotal  = nodes.length;
-  const nodeScore   = nodesTotal ? Math.round((nodesOnline / nodesTotal) * 100) : 0;
-
+  const nodeScore =
+    nodesTotal === 0 ? 0
+    : nodesOnline === nodesTotal ? 100
+    : Math.max(50, Math.round((nodesOnline / nodesTotal) * 100));
+ 
   // 2. PROXY SCORE (25%)
-  const proxySuccessRate = proxyStats?.avg_success_rate ?? 0;
-  const avgProxyLatency  = Math.round(proxyStats?.avg_latency_ms ?? 0);
-  // Penalizar latencia > 500ms
-  const latencyPenalty   = avgProxyLatency > 500 ? 20 : avgProxyLatency > 300 ? 10 : 0;
-  const proxyScore       = Math.max(0, Math.min(100, Math.round(proxySuccessRate) - latencyPenalty));
-
+  // Ahora el backend devuelve avg_success_rate real (0-100).
+  // Fallback: si no hay datos aún, calcular desde active/total.
+  const totalProxies   = proxyStats?.total ?? 0;
+  const activeProxies  = proxyStats?.active ?? 0;
+  const avgSuccessRate: number =
+    proxyStats?.avg_success_rate != null
+      ? Number(proxyStats.avg_success_rate)
+      : totalProxies > 0 ? Math.round(activeProxies / totalProxies * 100) : 50;
+ 
+  const avgProxyLatency = Math.round(proxyStats?.avg_latency_ms ?? 0);
+  // Penalización por latencia: escalonada
+  const latencyPenalty =
+    avgProxyLatency > 2000 ? 30
+    : avgProxyLatency > 1500 ? 20
+    : avgProxyLatency > 800  ? 10
+    : 0;
+  const proxyScore = Math.max(0, Math.min(100, Math.round(avgSuccessRate) - latencyPenalty));
+ 
   // 3. ALERT SCORE (20%)
   const criticalAlerts = (alerts ?? []).filter(
-    (a: any) => (a.severity === 'critical' || a.severity === 'error') && a.source !== 'proxy_rotation'
+    (a: any) => (a.severity === 'critical' || a.severity === 'error')
+              && a.source !== 'proxy_rotation'
   ).length;
   const warningAlerts = (alerts ?? []).filter((a: any) => a.severity === 'warning').length;
   const alertScore    = Math.max(0, 100 - criticalAlerts * 25 - warningAlerts * 8);
-
+ 
   // 4. ADSPOWER SCORE (15%)
   const adspowerHealthy = !!components?.adspower?.healthy;
   const adspowerScore   = adspowerHealthy ? 100 : 0;
-
+ 
   // 5. INFRA SCORE (10%) — DB + Redis
   const dbHealthy    = !!components?.database?.healthy;
   const redisHealthy = !!components?.redis?.healthy;
   const infraScore   = Math.round(((dbHealthy ? 1 : 0) + (redisHealthy ? 1 : 0)) / 2 * 100);
-
+ 
   const score = Math.max(0, Math.min(100, Math.round(
-    nodeScore    * 0.30 +
-    proxyScore   * 0.25 +
-    alertScore   * 0.20 +
-    adspowerScore* 0.15 +
-    infraScore   * 0.10
+    nodeScore     * 0.30 +
+    proxyScore    * 0.25 +
+    alertScore    * 0.20 +
+    adspowerScore * 0.15 +
+    infraScore    * 0.10
   )));
-
+ 
   return {
     score,
     details: {
       nodeScore, proxyScore, alertScore, adspowerScore, infraScore,
       factors: {
         nodesOnline, nodesTotal,
-        proxySuccessRate, avgProxyLatency,
+        proxySuccessRate: avgSuccessRate,
+        avgProxyLatency,
         criticalAlerts, warningAlerts,
         adspowerHealthy, dbHealthy, redisHealthy,
         activeSessions,
@@ -416,7 +500,6 @@ function _computeHealth(
     },
   };
 }
-
 // ─── REEMPLAZAR _extractRisks ────────────────────────────────────────────────
 
 function _extractRisks(nodes: any[], alerts: any[], components: any = {}, proxyStats: any = {}): string[] {

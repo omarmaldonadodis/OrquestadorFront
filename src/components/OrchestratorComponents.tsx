@@ -4,7 +4,7 @@ import {
     Monitor, Users, AlertTriangle, Activity,
     Wifi, WifiOff, Cpu, HardDrive, Clock,
     MoreHorizontal, CheckCircle2, History, Info, Globe, Terminal, ChevronRight,
-    Shield, Cookie, Fingerprint, RefreshCw, Server
+    Shield, Cookie, Fingerprint, RefreshCw, Server, Trash2
 } from 'lucide-react';
 import { ComputerNode, ProfileItem, Alert, Job, SystemEvent, ServiceStatus } from '../types/orchestratorTypes';
 import { timeAgo } from '../utils/time';
@@ -130,12 +130,16 @@ export const ProfileRow = ({
     profile,
     connections = [],
     onHistory,
-    onSecurity
+    onSecurity,
+    onRotateProxy,
+    onDelete,
 }: {
-    profile:     ProfileItem;
-    connections?: ConnectionItem[];   // ← opcional para no romper OrchestratorAdmin
-    onHistory:   () => void;
-    onSecurity:  () => void;
+    profile: ProfileItem;
+    connections?: ConnectionItem[];
+    onHistory: () => void;
+    onSecurity: () => void;
+    onRotateProxy?: () => void;
+    onDelete?: () => void;
 }) => {
     const activeConn = connections.find(c => c.id === String(profile.proxyId));
 
@@ -192,6 +196,24 @@ export const ProfileRow = ({
                 <button onClick={onSecurity} className={`p-1 rounded transition-colors ${isSecure ? 'text-[#00ff88] hover:bg-[#00ff88]/10' : 'text-red-500 hover:bg-red-500/10 animate-pulse'}`} title="Security Check">
                     <Shield size={14} />
                 </button>
+                     {onRotateProxy && (
+                       <button
+                         onClick={onRotateProxy}
+                         title="Rotar proxy ahora"
+                         className="p-1 hover:bg-blue-500/10 rounded text-[#666] hover:text-blue-400 transition-colors"
+                       >
+                         <RefreshCw size={14} />
+                       </button>
+                     )}
+                                {onDelete && (
+                    <button
+                        onClick={onDelete}
+                        title="Eliminar perfil"
+                        className="p-1 hover:bg-red-500/10 rounded text-[#666] hover:text-red-500 transition-colors"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                )}
                 <button onClick={onHistory} className="p-1 hover:bg-white/10 rounded text-[#666] hover:text-white transition-colors" title="View History">
                     <History size={14} />
                 </button>
@@ -262,7 +284,7 @@ export const GlobalStatusHero = ({
                         SISTEMA {status}
                         {isOk && (
                             <span className="text-xs not-italic bg-[#00ff88]/20 text-[#00ff88] px-2 py-0.5 rounded font-bold tracking-normal group-hover:bg-[#00ff88] group-hover:text-black transition-colors">
-                                OPERATIVO 100%
+                                OPERATIVO
                             </span>
                         )}
                     </h2>
@@ -470,12 +492,6 @@ export const HealthOverview = ({
                 ))}
             </div>
 
-            <button
-                onClick={onDetails}
-                className="w-full py-2 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase rounded text-white border border-white/5 transition-colors flex items-center justify-center gap-2 group-hover/card:bg-[#00ff88]/10 group-hover/card:text-[#00ff88] group-hover/card:border-[#00ff88]/30"
-            >
-                Ver Diagnóstico Completo <MoreHorizontal size={12} />
-            </button>
         </div>
     );
 };
@@ -602,9 +618,9 @@ export const ServiceStatusBar = ({ services = [], onServiceClick }: { services: 
                     >
                         <div className={`size-1.5 rounded-full ${dotClass}`} />
                         {svc.name}
-                        {!isUnknown && (
+                        {!isUnknown && svc.latency > 0 && (
                             <span className="text-white/30 ml-1 font-mono">
-                                {svc.latency > 0 ? `${svc.latency}ms` : '—'}
+                                {svc.latency}ms
                             </span>
                         )}
                     </button>

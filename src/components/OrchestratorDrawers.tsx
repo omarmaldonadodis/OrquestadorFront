@@ -17,9 +17,29 @@ interface NodeDrawerProps {
     logs: { timestamp: string; level: string; message: string }[];
     onClose: () => void;
 }
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+const formatTs = (ts: string) => {
+    try {
+        return new Date(ts).toLocaleString('es-ES', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+        });
+    } catch { return ts; }
+};
+
+const formatTime = (ts: string) => {
+    try {
+        return new Date(ts).toLocaleTimeString('es-ES', {
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+        });
+    } catch { return ts; }
+};
 
 // ─── EVENT DETAIL MODAL ──────────────────────────────────────────────────────
 // Fetch eliminado — el padre maneja la carga y pasa pages como prop
+
+// ─── EVENT DETAIL MODAL ──────────────────────────────────────────────────────
 
 export const EventDetailModal = ({
     event,
@@ -37,6 +57,11 @@ export const EventDetailModal = ({
     const proxyLog: string[] = (event as any).meta?.log ?? [];
     const hasProxyLog = proxyLog.length > 0;
 
+    // ← FIX: más recientes primero
+    const sortedPages = [...pages].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
@@ -53,7 +78,7 @@ export const EventDetailModal = ({
                 </div>
 
                 <h3 className="text-lg font-black text-white italic mb-1">Detalle del Evento</h3>
-                <p className="text-xs text-[#666] mb-4 font-mono">{event.timestamp}</p>
+                <p className="text-xs text-[#666] mb-4 font-mono">{formatTs(event.timestamp)}</p>
 
                 <div className="bg-white/5 p-4 rounded-xl border border-white/5 mb-4">
                     <p className="text-sm font-bold text-white mb-2">{event.message}</p>
@@ -73,14 +98,11 @@ export const EventDetailModal = ({
                                     const isRotated = line.startsWith('↺');
                                     return (
                                         <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.04] last:border-0">
-                                            <p className={`text-[10px] font-mono truncate flex-1 ${isOk ? 'text-[#888]' :
-                                                    isRotated ? 'text-blue-400' : 'text-red-400'
-                                                }`}>
+                                            <p className={`text-[10px] font-mono truncate flex-1 ${isOk ? 'text-[#888]' : isRotated ? 'text-blue-400' : 'text-red-400'}`}>
                                                 {line.slice(2)}
                                             </p>
                                             <span className={`text-[9px] font-black uppercase shrink-0 px-1.5 py-0.5 rounded ${isOk ? 'text-[#00ff88] bg-[#00ff88]/10' :
-                                                    isRotated ? 'text-blue-400 bg-blue-400/10' :
-                                                        'text-red-400 bg-red-400/10'
+                                                    isRotated ? 'text-blue-400 bg-blue-400/10' : 'text-red-400 bg-red-400/10'
                                                 }`}>
                                                 {isOk ? 'OK' : isRotated ? 'ROTADO' : 'FALLO'}
                                             </span>
@@ -92,8 +114,8 @@ export const EventDetailModal = ({
                     </div>
                 )}
 
-                {/* PÁGINAS VISITADAS — datos vienen del padre */}
-                {(loadingPages || pages.length > 0) && (
+                {/* PÁGINAS VISITADAS — más recientes arriba */}
+                {(loadingPages || sortedPages.length > 0) && (
                     <div className="mb-4">
                         <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-2 flex items-center gap-2">
                             <History size={10} /> Páginas visitadas
@@ -101,13 +123,13 @@ export const EventDetailModal = ({
                         <div className="bg-[#080808] border border-white/5 rounded-xl max-h-40 overflow-y-auto custom-scrollbar">
                             {loadingPages ? (
                                 <p className="text-[10px] text-[#444] animate-pulse p-3">Cargando...</p>
-                            ) : pages.map((p, i) => (
+                            ) : sortedPages.map((p, i) => (
                                 <div key={p.id ?? i} className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/[0.04] last:border-0">
                                     <p className="text-[10px] text-[#888] truncate flex-1">
                                         {(() => { try { return new URL(p.url).hostname; } catch { return p.url; } })()}
                                     </p>
                                     <p className="text-[9px] text-[#555] font-mono shrink-0">
-                                        {new Date(p.timestamp).toLocaleTimeString()}
+                                        {formatTime(p.timestamp)}
                                     </p>
                                 </div>
                             ))}
@@ -347,6 +369,27 @@ export const AlertModal = ({
 // ─── SESSION HISTORY MODAL ───────────────────────────────────────────────────
 // Bug corregido: usaba `event` (singular) en lugar de `ev` dentro del .map()
 
+// ─── SESSION HISTORY MODAL ───────────────────────────────────────────────────
+// Reemplaza el componente SessionHistoryModal en OrchestratorDrawers.tsx
+
+// Helpers de fecha — añade esto junto a los otros helpers de formato en el archivo
+const formatSessionDate = (ts: string) => {
+    try {
+        const d = new Date(ts);
+        const date = d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+        const time = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        return `${date} · ${time}`;
+    } catch { return ts; }
+};
+
+const formatPageTime = (ts: string) => {
+    try {
+        return new Date(ts).toLocaleTimeString('es-ES', {
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+        });
+    } catch { return ts; }
+};
+
 export const SessionHistoryModal = ({
     isOpen,
     events,
@@ -354,91 +397,226 @@ export const SessionHistoryModal = ({
     onClose,
 }: {
     isOpen: boolean;
-    events: SystemEvent[];
+    events: SystemEvent[];   // SystemEvent importado del mismo archivo
     profileId: string | null;
     onClose: () => void;
 }) => {
+    const [expandedId, setExpandedId] = React.useState<string | null>(null);
+    // Cache: ev.id → array de páginas visitadas
+    const [pagesCache, setPagesCache] = React.useState<Record<string, any[]>>({});
+    const [loadingId, setLoadingId] = React.useState<string | null>(null);
+
+    // Reset al cerrar/abrir
+    React.useEffect(() => {
+        if (!isOpen) {
+            setExpandedId(null);
+            setPagesCache({});
+        }
+    }, [isOpen]);
+
+    const handleToggle = React.useCallback(async (ev: SystemEvent) => {
+        // Si ya estaba abierto, cerrar
+        if (expandedId === ev.id) {
+            setExpandedId(null);
+            return;
+        }
+
+        setExpandedId(ev.id);
+
+        // Si ya tenemos las páginas en caché, no re-fetch
+        if (pagesCache[ev.id] !== undefined) return;
+
+        const sessionId = (ev as any).meta?.session_id ?? ev.id;
+        setLoadingId(ev.id);
+
+        try {
+            const r = await fetch(`/api/v1/admin/sessions/${sessionId}/events`);
+            const d = await r.json();
+
+            // Filtrar solo page_visit y ordenar más recientes primero
+            const pages = (d.events ?? [])
+                .filter((e: any) => e.type === 'page_visit' || e.url)
+                .sort((a: any, b: any) =>
+                    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                );
+
+            setPagesCache(prev => ({ ...prev, [ev.id]: pages }));
+        } catch {
+            setPagesCache(prev => ({ ...prev, [ev.id]: [] }));
+        } finally {
+            setLoadingId(null);
+        }
+    }, [expandedId, pagesCache]);
+
     if (!isOpen || !profileId) return null;
 
     return (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-            <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[90] p-6 shadow-2xl animate-fade-in-up flex flex-col max-h-[80vh]">
+            <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[90] p-6 shadow-2xl animate-fade-in-up flex flex-col max-h-[85vh]">
                 <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white">
                     <X size={20} />
                 </button>
 
-                <div className="flex items-center gap-3 mb-6">
+                {/* HEADER */}
+                <div className="flex items-center gap-3 mb-5">
                     <div className="p-3 rounded-xl bg-blue-500/10 text-blue-500">
                         <History size={24} />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black text-white uppercase tracking-tighter">Session History</h3>
-                        <p className="text-xs text-[#666] font-mono">Profile ID: {profileId}</p>
+                        <h3 className="text-lg font-black text-white uppercase tracking-tighter">
+                            Session History
+                        </h3>
+                        <p className="text-xs text-[#555] font-mono">
+                            Perfil #{profileId} · {events.length} sesión{events.length !== 1 ? 'es' : ''}
+                        </p>
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-2 mb-6">
+                {/* LIST */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 mb-5">
                     {events.length === 0 ? (
-                        <div className="text-center py-8 text-[#444] text-xs font-bold uppercase">
-                            No history events found
+                        <div className="text-center py-12 border border-dashed border-white/5 rounded-2xl">
+                            <History size={20} className="text-[#333] mx-auto mb-2" />
+                            <p className="text-[#444] text-xs font-bold uppercase">
+                                Sin sesiones registradas
+                            </p>
                         </div>
                     ) : (
-                        events.map((ev, i) => (
-                            <div key={ev.id} className="flex gap-4 relative">
-                                <div className="flex flex-col items-center">
-                                    <div className={`size-3 rounded-full border-2 border-[#0c0c0c] z-10 ${ev.type === 'SUCCESS' ? 'bg-[#00ff88]' :
-                                            ev.type === 'ERROR' ? 'bg-red-500' : 'bg-blue-500'
-                                        }`} />
-                                    {i < events.length - 1 && (
-                                        <div className="w-px flex-1 bg-white/10 my-1" />
-                                    )}
-                                </div>
-                                <div className="flex-1 pb-4">
-                                    <div className="flex justify-between items-start">
-                                        <p className="text-xs font-bold text-[#ccc]">{ev.message}</p>
-                                        <span className="text-[9px] text-[#555] font-mono shrink-0 ml-2">{ev.timestamp}</span>
-                                    </div>
-                                    <p className="text-[10px] text-[#666] mt-0.5 font-mono uppercase">
-                                        {ev.type} • {ev.source}
-                                    </p>
+                        events.map((ev, i) => {
+                            const isOpen_ = expandedId === ev.id;
+                            const isLoading = loadingId === ev.id;
+                            const pages = pagesCache[ev.id] ?? [];
 
-                                    {/* ✅ Bug corregido: ev en lugar de event */}
-                                    {ev?.meta?.log && (ev.meta.log as string[]).length > 0 && (
-                                        <div className="mt-3 p-3 bg-black/40 rounded-xl border border-white/5">
-                                            <p className="text-[9px] font-black text-[#444] uppercase mb-2">Detalle por proxy</p>
-                                            <div className="space-y-0.5 font-mono text-[10px]">
-                                                {(ev.meta.log as string[]).map((line: string, li: number) => (
-                                                    <div key={li} className={
-                                                        line.startsWith('✓') ? 'text-green-500' :
-                                                            line.startsWith('↺') ? 'text-blue-400' : 'text-red-400'
-                                                    }>
-                                                        {line}
-                                                    </div>
-                                                ))}
+                            const statusColor =
+                                ev.type === 'SUCCESS' ? 'bg-[#00ff88]' :
+                                    ev.type === 'ERROR' ? 'bg-red-500' : 'bg-blue-500';
+
+                            const borderColor =
+                                ev.type === 'SUCCESS' ? 'border-[#00ff88]/20' :
+                                    ev.type === 'ERROR' ? 'border-red-500/20' : 'border-white/10';
+
+                            return (
+                                <div
+                                    key={ev.id}
+                                    className={`rounded-xl border transition-all overflow-hidden ${isOpen_
+                                            ? `${borderColor} bg-white/[0.03]`
+                                            : 'border-white/5 bg-[#0a0a0a] hover:bg-white/[0.04]'
+                                        }`}
+                                >
+                                    {/* ROW — clickeable */}
+                                    <button
+                                        onClick={() => handleToggle(ev)}
+                                        className="w-full text-left p-4 flex items-start gap-3"
+                                    >
+                                        {/* dot */}
+                                        <div className={`shrink-0 size-2.5 rounded-full mt-1.5 ${statusColor}`} />
+
+                                        {/* contenido */}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-white truncate">
+                                                {ev.message}
+                                            </p>
+                                            <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                                <span className={`text-[9px] font-black uppercase ${ev.type === 'SUCCESS' ? 'text-[#00ff88]' :
+                                                        ev.type === 'ERROR' ? 'text-red-400' : 'text-blue-400'
+                                                    }`}>
+                                                    {ev.type}
+                                                </span>
+                                                <span className="text-[9px] text-[#555] font-mono">
+                                                    {formatSessionDate(ev.timestamp)}
+                                                </span>
+                                                {(ev as any).meta?.computer_id && (
+                                                    <span className="text-[9px] text-[#444] font-mono uppercase">
+                                                        Computer #{(ev as any).meta.computer_id}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
-                                    )}
 
-                                    {ev?.meta?.message && (
-                                        <p className="mt-2 text-xs text-[#888] font-mono">{ev.meta.message as string}</p>
-                                    )}
+                                        {/* chevron */}
+                                        <ChevronRight
+                                            size={14}
+                                            className={`text-[#444] shrink-0 mt-0.5 transition-transform duration-200 ${isOpen_ ? 'rotate-90 text-[#00ff88]' : ''
+                                                }`}
+                                        />
+                                    </button>
 
-                                    {ev.type === 'ERROR' && (
-                                        <p className="mt-1 text-[9px] font-black text-red-500 uppercase flex items-center gap-1">
-                                            <AlertTriangle size={10} /> Error en sesión
-                                        </p>
+                                    {/* ACCORDION — páginas visitadas */}
+                                    {isOpen_ && (
+                                        <div className="px-4 pb-4 border-t border-white/5">
+                                            <p className="text-[9px] font-black text-[#444] uppercase tracking-widest pt-3 pb-2 flex items-center gap-2">
+                                                <History size={9} />
+                                                Páginas visitadas
+                                                {pages.length > 0 && (
+                                                    <span className="text-[#555]">· {pages.length}</span>
+                                                )}
+                                            </p>
+
+                                            {isLoading ? (
+                                                <div className="flex items-center gap-2 py-3 px-2">
+                                                    <RefreshCw size={11} className="text-[#00ff88] animate-spin" />
+                                                    <p className="text-[10px] text-[#444] animate-pulse">
+                                                        Cargando páginas...
+                                                    </p>
+                                                </div>
+                                            ) : pages.length === 0 ? (
+                                                <div className="py-3 px-2 border border-dashed border-white/5 rounded-lg text-center">
+                                                    <p className="text-[10px] text-[#333] italic">
+                                                        Sin páginas registradas en esta sesión
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-[#080808] border border-white/5 rounded-xl overflow-hidden max-h-56 overflow-y-auto custom-scrollbar">
+                                                    {pages.map((page, pi) => {
+                                                        let hostname = page.url;
+                                                        try { hostname = new URL(page.url).hostname; } catch { }
+                                                        const title = page.title || (page.extra?.title) || null;
+
+                                                        return (
+                                                            <div
+                                                                key={page.id ?? pi}
+                                                                className="flex items-center gap-3 px-3 py-2.5 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.03] transition-colors"
+                                                            >
+                                                                {/* índice */}
+                                                                <span className="text-[9px] text-[#333] font-mono w-4 shrink-0 text-right">
+                                                                    {pi + 1}
+                                                                </span>
+
+                                                                {/* contenido */}
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-[11px] font-bold text-[#ccc] truncate">
+                                                                        {hostname}
+                                                                    </p>
+                                                                    {title && (
+                                                                        <p className="text-[9px] text-[#555] truncate mt-0.5">
+                                                                            {title}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* hora */}
+                                                                <span className="text-[9px] text-[#444] font-mono shrink-0">
+                                                                    {formatPageTime(page.timestamp)}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
 
+                {/* FOOTER */}
                 <div className="pt-4 border-t border-white/5">
                     <button
                         onClick={onClose}
-                        className="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl border border-white/5 text-xs uppercase transition-colors"
+                        className="w-full py-3 bg-[#00ff88]/10 hover:bg-[#00ff88]/20 text-[#00ff88] font-black rounded-xl border border-[#00ff88]/20 text-xs uppercase transition-colors"
                     >
                         Cerrar
                     </button>
@@ -607,223 +785,7 @@ export const DashKPIModal = ({
     );
 };
 
-// ─── DASH FILTERS DRAWER ─────────────────────────────────────────────────────
 
-export const DashFiltersDrawer = ({ isOpen, onClose, filters, setFilters, onReset }: any) => {
-    if (!isOpen) return null;
-
-    return (
-        <>
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" onClick={onClose} />
-            <div className="fixed inset-y-0 right-0 w-[300px] bg-[#0c0c0c] border-l border-white/10 z-[70] shadow-2xl flex flex-col animate-slide-in-right p-6">
-                <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-lg font-black text-white uppercase tracking-wider">Filtros Dash</h3>
-                    <button onClick={onClose}><X size={20} className="text-[#666] hover:text-white" /></button>
-                </div>
-
-                <div className="space-y-6 flex-1">
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-[#666] uppercase">Rango de Tiempo</label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {['15m', '1h', '24h'].map(t => (
-                                <button
-                                    key={t}
-                                    onClick={() => setFilters({ ...filters, timeRange: t })}
-                                    className={`py-2 text-xs font-bold rounded border ${filters.timeRange === t
-                                            ? 'bg-[#00ff88] text-black border-[#00ff88]'
-                                            : 'bg-white/5 text-[#ccc] border-white/5'
-                                        }`}
-                                >
-                                    {t}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-[#666] uppercase">Severidad Alertas</label>
-                        <select
-                            value={filters.severity}
-                            onChange={e => setFilters({ ...filters, severity: e.target.value })}
-                            className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-[#00ff88]"
-                        >
-                            <option value="ALL">Todas</option>
-                            <option value="Critical">Críticas</option>
-                            <option value="Warning">Advertencias</option>
-                        </select>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-[#666] uppercase">Propietario</label>
-                        <select
-                            value={filters.owner || 'ALL'}
-                            onChange={e => setFilters({ ...filters, owner: e.target.value })}
-                            className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-[#00ff88]"
-                        >
-                            <option value="ALL">Todos</option>
-                            <option value="Jonathan Ayala - Loja">Jonathan Ayala - Loja</option>
-                            <option value="Gabriel Guaman- Azoques">Gabriel Guaman- Azoques</option>
-                            <option value="Josue Correa- Quito">Josue Correa- Quito</option>
-                            <option value="William Muñoz - Cuenca">William Muñoz - Cuenca</option>
-                            <option value="Nicolas Ullauri - Loja">Nicolas Ullauri - Loja</option>
-                            <option value="Paul Jimenez - Cuenca">Paul Jimenez - Cuenca</option>
-                            <option value="David - Cuenca">David - Cuenca</option>
-                            <option value="LUIS GUERRERO - Cuenca">LUIS GUERRERO - Cuenca</option>
-                            <option value="Stalin Arauz- Quito">Stalin Arauz- Quito</option>
-                            <option value="Adrian Cevallos - Manta">Adrian Cevallos - Manta</option>
-                        </select>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-[#666] uppercase">Estado Cookies</label>
-                        <select
-                            value={filters.cookieStatus || 'ALL'}
-                            onChange={e => setFilters({ ...filters, cookieStatus: e.target.value })}
-                            className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-[#00ff88]"
-                        >
-                            <option value="ALL">Cualquiera</option>
-                            <option value="OK">Seguras (OK)</option>
-                            <option value="EXPIRED">Expiradas</option>
-                            <option value="MISSING">Faltantes</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div className="space-y-3">
-                    <button onClick={onReset} className="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl border border-white/5 text-xs uppercase transition-colors">
-                        Reestablecer
-                    </button>
-                    <button onClick={onClose} className="w-full py-3 bg-[#00ff88] text-black font-black rounded-xl text-xs uppercase transition-colors">
-                        Aplicar Filtros
-                    </button>
-                </div>
-            </div>
-        </>
-    );
-};
-
-// ─── HEALTH DETAIL MODAL ─────────────────────────────────────────────────────
-
-export const HealthDetailModal = ({
-    isOpen,
-    score,
-    onClose,
-}: {
-    isOpen: boolean;
-    score: number;
-    onClose: () => void;
-}) => {
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-            <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-md relative z-[90] p-6 shadow-2xl animate-fade-in-up">
-                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white">
-                    <X size={20} />
-                </button>
-
-                <h3 className="text-lg font-black text-white italic mb-1">Detalle de Salud</h3>
-                <p className="text-xs text-[#666] mb-6">Cálculo en tiempo real basado en 3 factores.</p>
-
-                <div className="space-y-4 mb-6">
-                    {[
-                        { label: 'Tiempo de Respuesta', value: '45ms', color: 'text-[#00ff88]', impact: 'Alto' },
-                        { label: 'Tasa de Errores', value: '0.02%', color: 'text-green-500', impact: 'Crítico' },
-                        { label: 'Disponibilidad (Uptime)', value: '99.9%', color: 'text-[#00ff88]', impact: 'Medio' },
-                    ].map(item => (
-                        <div key={item.label} className="p-4 bg-white/5 rounded-xl flex justify-between items-center border border-white/5">
-                            <span className="text-xs font-bold text-[#ccc]">{item.label}</span>
-                            <div className="text-right">
-                                <span className={`block font-mono font-bold ${item.color}`}>{item.value}</span>
-                                <span className="text-[9px] text-[#555]">Impacto: {item.impact}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="bg-[#00ff88]/5 border border-[#00ff88]/20 p-4 rounded-xl">
-                    <h4 className="text-[10px] font-black text-[#00ff88] uppercase mb-2">Recomendaciones</h4>
-                    <ul className="text-[10px] text-[#ccc] space-y-1 list-disc pl-4">
-                        <li>El sistema opera nominalmente.</li>
-                        <li>Revisar Node-02 por picos ocasionales de latencia.</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// ─── SERVICE DETAIL MODAL ────────────────────────────────────────────────────
-
-export const ServiceDetailModal = ({
-    service,
-    onClose,
-}: {
-    service: ServiceStatus | null;
-    onClose: () => void;
-}) => {
-    if (!service) return null;
-
-    const isOnline = service.status === 'ONLINE';
-
-    return (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-            <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[90] p-6 shadow-2xl animate-fade-in-up">
-                <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white">
-                    <X size={20} />
-                </button>
-
-                <div className="flex items-center gap-4 mb-6">
-                    <div className={`p-4 rounded-xl ${isOnline ? 'bg-[#00ff88]/10 text-[#00ff88]' : 'bg-red-500/10 text-red-500'}`}>
-                        <Server size={24} />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-black text-white italic tracking-tighter">{service.name}</h3>
-                        <p className="text-xs text-[#666] font-mono uppercase">Version 2.4.0 • {service.status}</p>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-[#0a0a0a] border border-white/5 p-4 rounded-xl">
-                        <span className="text-[10px] text-[#666] uppercase block mb-1">Latencia</span>
-                        <span className={`text-xl font-mono font-bold ${service.latency < 100 ? 'text-[#00ff88]' : 'text-amber-500'}`}>
-                            {service.latency}ms
-                        </span>
-                    </div>
-                    <div className="bg-[#0a0a0a] border border-white/5 p-4 rounded-xl">
-                        <span className="text-[10px] text-[#666] uppercase block mb-1">Uptime</span>
-                        <span className="text-xl font-mono font-bold text-white">99.98%</span>
-                    </div>
-                </div>
-
-                <div className="mb-6">
-                    <h4 className="text-[10px] font-black text-[#555] uppercase mb-2">Service Logs</h4>
-                    <div className="bg-black border border-white/10 rounded-lg p-3 font-mono text-[10px] text-[#888] h-32 overflow-y-auto">
-                        <p className="text-[#00ff88]">&gt; [10:00:00] Service heartbeat OK</p>
-                        <p>&gt; [10:05:00] Processing batch job #2991</p>
-                        <p>&gt; [10:10:00] Cache validation successful</p>
-                        <p className="text-amber-500">&gt; [10:15:20] Warning: Connection pool &gt; 80%</p>
-                        <p>&gt; [10:20:00] Service heartbeat OK</p>
-                    </div>
-                </div>
-
-                <div className="flex gap-2">
-                    <button className="flex-1 py-3 bg-[#00ff88]/10 text-[#00ff88] font-bold uppercase text-xs rounded-xl hover:bg-[#00ff88]/20 transition-colors flex items-center justify-center gap-2">
-                        <RefreshCw size={14} /> Restart
-                    </button>
-                    <button className="flex-1 py-3 bg-red-500/10 text-red-500 font-bold uppercase text-xs rounded-xl hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2">
-                        <Pause size={14} /> Stop Service
-                    </button>
-                    <button className="flex-1 py-3 bg-white/5 text-white font-bold uppercase text-xs rounded-xl hover:bg-white/10 transition-colors flex items-center justify-center gap-2">
-                        <Terminal size={14} /> Config
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 // ─── SECURITY CHECK MODAL ────────────────────────────────────────────────────
 
@@ -838,93 +800,193 @@ export const SecurityCheckModal = ({
 }) => {
     if (!profile) return null;
 
-    const browserScore = profile.browserScore || 0;
-    const fingerprintScore = profile.fingerprintScore || 0;
-    const isCookiesOk = profile.cookieStatus === 'OK';
+    const browserScore    = profile.browserScore    || 0;
+    const isCookiesOk     = profile.cookieStatus    === 'OK';
+    const result          = (profile as any).verifyResult as import('../types/orchestratorTypes').VerifyResult | undefined;
+    const [verifying, setVerifying] = React.useState(false);
+
+    const scoreColor = (s: number) =>
+        s >= 80 ? 'text-[#00ff88]' : s >= 60 ? 'text-amber-500' : 'text-red-500';
+    const scoreBg = (s: number) =>
+        s >= 80 ? 'bg-[#00ff88]/5 border-[#00ff88]/20' : s >= 60 ? 'bg-amber-500/5 border-amber-500/20' : 'bg-red-500/5 border-red-500/20';
+
+    const gradeColor = (g?: string) => (({
+        EXCELENTE: 'text-[#00ff88] bg-[#00ff88]/10 border-[#00ff88]/30',
+        BUENO:     'text-blue-400 bg-blue-400/10 border-blue-400/30',
+        REGULAR:   'text-amber-500 bg-amber-500/10 border-amber-500/30',
+        DÉBIL:     'text-red-500 bg-red-500/10 border-red-500/30',
+    } as Record<string, string>)[g ?? 'DÉBIL'] ?? 'text-red-500 bg-red-500/10 border-red-500/30');
+
+    const handleVerify = async () => {
+        setVerifying(true);
+        await onVerify(profile.id);
+        setVerifying(false);
+    };
 
     return (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-            <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[90] p-6 shadow-2xl animate-fade-in-up">
+            <div className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-lg relative z-[90] p-6 shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto custom-scrollbar">
                 <button onClick={onClose} className="absolute right-4 top-4 text-[#666] hover:text-white">
                     <X size={20} />
                 </button>
 
-                <div className="flex items-center gap-4 mb-6">
+                {/* HEADER */}
+                <div className="flex items-center gap-4 mb-5">
                     <div className="p-4 rounded-xl bg-blue-500/10 text-blue-500">
                         <Shield size={24} />
                     </div>
-                    <div>
-                        <h3 className="text-xl font-black text-white italic tracking-tighter">Seguridad & Cookies</h3>
+                    <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-xl font-black text-white italic tracking-tighter">Seguridad & Cookies</h3>
+                            {result?.grade && (
+                                <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase border ${gradeColor(result.grade)}`}>
+                                    {result.grade}
+                                </span>
+                            )}
+                        </div>
                         <p className="text-xs text-[#666]">
                             Verificación de integridad para: <span className="text-white font-bold">{profile.name}</span>
                         </p>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className={`p-4 rounded-xl border ${browserScore >= 80 ? 'bg-[#00ff88]/5 border-[#00ff88]/20' :
-                            browserScore >= 60 ? 'bg-amber-500/5 border-amber-500/20' :
-                                'bg-red-500/5 border-red-500/20'
-                        }`}>
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-black uppercase text-[#888]">Browser Score</span>
-                            <Fingerprint size={16} className={
-                                browserScore >= 80 ? 'text-[#00ff88]' :
-                                    browserScore >= 60 ? 'text-amber-500' : 'text-red-500'
-                            } />
-                        </div>
-                        <p className={`text-3xl font-black ${browserScore >= 80 ? 'text-[#00ff88]' :
-                                browserScore >= 60 ? 'text-amber-500' : 'text-red-500'
-                            }`}>
-                            {browserScore}%
-                        </p>
-                        <p className="text-[9px] text-[#666] mt-1">Integridad de huella digital</p>
+                {/* SCORES */}
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                    <div className={`p-3 rounded-xl border text-center ${scoreBg(browserScore)}`}>
+                        <p className={`text-2xl font-black ${scoreColor(browserScore)}`}>{browserScore}</p>
+                        <p className="text-[9px] text-[#666] uppercase mt-1">Browser</p>
                     </div>
-
-                    <div className={`p-4 rounded-xl border ${isCookiesOk ? 'bg-[#00ff88]/5 border-[#00ff88]/20' : 'bg-red-500/5 border-red-500/20'}`}>
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-black uppercase text-[#888]">Cookie Status</span>
-                            <Cookie size={16} className={isCookiesOk ? 'text-[#00ff88]' : 'text-red-500'} />
-                        </div>
-                        <p className={`text-xl font-black mt-1 ${isCookiesOk ? 'text-[#00ff88]' : 'text-red-500'}`}>
-                            {isCookiesOk ? 'ACTIVE' : 'EXPIRED'}
+                    <div className={`p-3 rounded-xl border text-center ${scoreBg(profile.fingerprintScore ?? 0)}`}>
+                        <p className={`text-2xl font-black ${scoreColor(profile.fingerprintScore ?? 0)}`}>{profile.fingerprintScore ?? 0}</p>
+                        <p className="text-[9px] text-[#666] uppercase mt-1">Fingerprint</p>
+                    </div>
+                    <div className={`p-3 rounded-xl border text-center ${isCookiesOk ? 'bg-[#00ff88]/5 border-[#00ff88]/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                        <p className={`text-lg font-black mt-1 ${isCookiesOk ? 'text-[#00ff88]' : 'text-red-500'}`}>
+                            {result?.cookie_count !== undefined ? result.cookie_count : (isCookiesOk ? '✓' : '✗')}
                         </p>
-                        <p className="text-[9px] text-[#666] mt-2">Sesión persistente</p>
+                        <p className="text-[9px] text-[#666] uppercase mt-1">
+                            {result?.cookie_count !== undefined ? 'Cookies' : profile.cookieStatus}
+                        </p>
                     </div>
                 </div>
 
-                <div className="bg-[#0a0a0a] border border-white/5 rounded-xl p-4 mb-6">
-                    <div className="flex items-center gap-3 mb-3">
-                        {isCookiesOk && browserScore > 60
-                            ? <CheckCircle2 size={16} className="text-[#00ff88]" />
-                            : <AlertTriangle size={16} className="text-amber-500" />
-                        }
-                        <span className="text-xs text-[#ccc]">
-                            {isCookiesOk && browserScore >= 60
-                                ? 'Perfil verificado y seguro. Navega para subir el score'
-                                : !isCookiesOk
-                                    ? 'Acción Requerida: Actualizar Cookies'
-                                    : `Score bajo (${browserScore}%) — Usar el perfil para subir score`
-                            }
-                        </span>
-                    </div>
-                    {(!isCookiesOk || browserScore < 60) && (
-                        <div className="bg-red-500/10 text-red-500 text-[10px] p-2 rounded border border-red-500/20 font-bold uppercase">
-                            Acción Requerida: {!isCookiesOk ? 'Actualizar Cookies' : 'Usar perfil para subir score'}
-                        </div>
-                    )}
-                </div>
+                {/* RESULTADO DETALLADO — solo si ya se verificó */}
+                {result && (
+                    <>
+                        {/* BREAKDOWN */}
+                        {result.breakdown && (
+                            <div className="mb-4">
+                                <p className="text-[10px] font-black text-[#444] uppercase tracking-widest mb-2">Checks</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {([
+                                        { key: 'automation_clean', label: 'Sin Automatización' },
+                                        { key: 'webrtc_clean',     label: 'WebRTC OK'         },
+                                        { key: 'webgl_real',       label: 'WebGL Real'         },
+                                        { key: 'has_plugins',      label: 'Plugins OK'         },
+                                        { key: 'has_cookies',      label: 'Cookies'            },
+                                        { key: 'timezone_match',   label: 'Timezone Match'     },
+                                    ] as const).map(({ key, label }) => {
+                                        const val = (result.breakdown as any)[key];
+                                        const isNull = val === null || val === undefined;
+                                        return (
+                                            <div key={key} className="flex items-center gap-2 p-2 bg-white/[0.02] rounded-lg border border-white/5">
+                                                <div className={`size-2 rounded-full flex-shrink-0 ${isNull ? 'bg-[#333]' : val ? 'bg-[#00ff88]' : 'bg-red-500'}`} />
+                                                <span className={`text-[10px] font-bold ${isNull ? 'text-[#444]' : val ? 'text-[#ccc]' : 'text-red-400'}`}>
+                                                    {label}
+                                                </span>
+                                                {isNull && <span className="text-[9px] text-[#333] ml-auto">N/A</span>}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
-                <div className="flex gap-2">
+                        {/* ISSUES */}
+                        {result.issues && result.issues.length > 0 && (
+                            <div className="mb-4">
+                                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                    <AlertTriangle size={10} /> Problemas ({result.issues.length})
+                                </p>
+                                <div className="space-y-1.5">
+                                    {result.issues.map((issue, i) => (
+                                        <div key={i} className="flex items-start gap-2 p-2.5 bg-red-500/5 border border-red-500/20 rounded-lg">
+                                            <div className="size-1.5 rounded-full bg-red-500 flex-shrink-0 mt-1.5" />
+                                            <p className="text-[11px] text-red-300 leading-tight">{issue}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* WARNINGS */}
+                        {result.warnings && result.warnings.length > 0 && (
+                            <div className="mb-4">
+                                <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2">
+                                    Advertencias ({result.warnings.length})
+                                </p>
+                                <div className="space-y-1.5">
+                                    {result.warnings.map((w, i) => (
+                                        <div key={i} className="flex items-start gap-2 p-2.5 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                                            <div className="size-1.5 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" />
+                                            <p className="text-[11px] text-amber-300 leading-tight">{w}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* FINGERPRINT RAW — colapsable */}
+                        {result.raw_fingerprint && (
+                            <details className="mb-4 group">
+                                <summary className="text-[10px] font-black text-[#444] uppercase tracking-widest cursor-pointer hover:text-[#888] transition-colors list-none flex items-center gap-2">
+                                    <ChevronRight size={10} className="group-open:rotate-90 transition-transform" />
+                                    Fingerprint Raw
+                                </summary>
+                                <div className="mt-2 bg-[#080808] border border-white/5 rounded-xl p-3 font-mono text-[9px] text-[#888] space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+                                    {Object.entries(result.raw_fingerprint).map(([k, v]) => {
+                                        if (v === null || v === undefined) return null;
+                                        const strVal = Array.isArray(v) ? v.join(', ') || '—' : String(v);
+                                        const isAlert = (k === 'webdriver' && v === true)
+                                            || (k === 'webrtcLeak' && v === true)
+                                            || (k === 'automationProps' && Array.isArray(v) && v.length > 0);
+                                        return (
+                                            <div key={k} className="flex gap-2">
+                                                <span className="text-[#555] flex-shrink-0 w-32">{k}</span>
+                                                <span className={isAlert ? 'text-red-400 font-bold' : 'text-[#aaa]'}>
+                                                    {strVal.length > 60 ? strVal.slice(0, 60) + '…' : strVal}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </details>
+                        )}
+
+                        {/* ERROR */}
+                        {result.error && (
+                            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                <p className="text-[10px] text-red-400 font-mono">{result.error}</p>
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {/* BOTONES */}
+                <div className="flex gap-2 mt-2">
                     <button
-                        onClick={() => onVerify(profile.id)}
-                        className="flex-1 py-3 bg-[#00ff88] text-black font-black uppercase text-xs rounded-xl hover:bg-[#00cc6a] transition-colors flex items-center justify-center gap-2"
+                        onClick={handleVerify}
+                        disabled={verifying}
+                        className="flex-1 py-3 bg-[#00ff88] text-black font-black uppercase text-xs rounded-xl hover:bg-[#00cc6a] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <CheckCircle2 size={16} /> Verificar & Aprobar
+                        {verifying
+                            ? <><RefreshCw size={14} className="animate-spin" /> Verificando...</>
+                            : <><CheckCircle2 size={14} /> {result ? 'Re-verificar' : 'Verificar Ahora'}</>
+                        }
                     </button>
-                    <button className="px-4 py-3 bg-white/5 text-white font-bold uppercase text-xs rounded-xl hover:bg-white/10 transition-colors" title="Ver logs">
-                        <History size={16} />
+                    <button onClick={onClose} className="px-4 py-3 bg-white/5 text-white font-bold uppercase text-xs rounded-xl hover:bg-white/10 transition-colors">
+                        Cerrar
                     </button>
                 </div>
             </div>
@@ -943,7 +1005,7 @@ export const SessionStartModal = ({
     isOpen: boolean;
     onClose: () => void;
     profiles: ProfileItem[];
-    onStart: (ids: string[]) => void;
+        onStart: (ids: string[], url: string) => void;  // ← agrega url
 }) => {
     const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
     const [filterMode, setFilterMode] = React.useState<'ALL' | 'OWNER' | 'BOOKIE'>('ALL');
@@ -951,6 +1013,34 @@ export const SessionStartModal = ({
 
     const owners = Array.from(new Set(profiles.map(p => p.owner).filter(Boolean))) as string[];
     const bookies = Array.from(new Set(profiles.map(p => p.bookie).filter(Boolean))) as string[];
+
+    const [loginMode, setLoginMode] = React.useState<'NORMAL' | 'DIRECT'>('NORMAL');
+    const [selectedBookieUrl, setSelectedBookieUrl] = React.useState<string>('');
+
+    // URLs quemadas de casas de apuestas
+    const BOOKIE_URLS: Record<string, { label: string; url: string; color: string }> = {
+        bet365: { label: 'Bet365', url: 'https://www.bet365.com', color: '#097b42' },
+        betfair: { label: 'Betfair', url: 'https://www.betfair.com', color: '#f5a623' },
+        '1xbet': { label: '1xBet', url: 'https://www.1xbet.com', color: '#1e5fa7' },
+        pinnacle: { label: 'Pinnacle', url: 'https://www.pinnacle.com', color: '#d41515' },
+        williamhill: { label: 'William Hill', url: 'https://www.williamhill.com', color: '#1a1a6e' },
+        bwin: { label: 'Bwin', url: 'https://www.bwin.com', color: '#1a1a1a' },
+        unibet: { label: 'Unibet', url: 'https://www.unibet.com', color: '#147b45' },
+        betway: { label: 'Betway', url: 'https://betway.com', color: '#00b67a' },
+        betsson: { label: 'Betsson', url: 'https://www.betsson.com', color: '#f5a623' },
+        codere: { label: 'Codere', url: 'https://www.codere.com', color: '#c8a84b' },
+        ecuabet: { label: 'Ecuabet', url: 'https://www.ecuabet.com', color: '#e63946' },
+        interwetten: { label: 'Interwetten', url: 'https://www.interwetten.com', color: '#004c97' },
+        betcris: { label: 'Betcris', url: 'https://www.betcris.com', color: '#1b3a6b' },
+        marathonbet: { label: 'Marathonbet', url: 'https://www.marathonbet.com', color: '#00843d' },
+        coolbet: { label: 'Coolbet', url: 'https://www.coolbet.com', color: '#f4d03f' },
+    };
+
+    // Calcular la URL final según modo
+    const getFinalUrl = () => {
+        if (loginMode === 'NORMAL') return 'https://www.google.com';
+        return selectedBookieUrl || 'https://www.google.com';
+    };
 
     if (!isOpen) return null;
 
@@ -1071,8 +1161,8 @@ export const SessionStartModal = ({
                                 <div className="col-span-4 font-bold text-white text-xs truncate">{p.name}</div>
                                 <div className="col-span-3 text-[10px] text-[#888] truncate">{p.owner || '-'}</div>
                                 <div className="col-span-2 flex justify-center">
-                                    <span className={`text-[10px] font-bold ${p.health > 80 ? 'text-[#00ff88]' : 'text-red-500'}`}>
-                                        {p.health}%
+                                    <span className={`text-[10px] font-bold ${p.browserScore > 80 ? 'text-[#00ff88]' : 'text-red-500'}`}>
+                                        {p.browserScore}%
                                     </span>
                                 </div>
                                 <div className="col-span-2 flex justify-center gap-1">
@@ -1085,18 +1175,67 @@ export const SessionStartModal = ({
                         ))}
                     </div>
 
+                    {/* FOOTER DEL MODAL */}
                     <div className="mt-4 flex justify-between items-center">
-                        <div className="flex bg-black p-1 rounded-lg border border-white/10">
-                            <button className="px-3 py-1 bg-[#00ff88] text-black text-[9px] font-black rounded uppercase">Login Directo</button>
-                            <button className="px-3 py-1 text-[#666] text-[9px] font-black rounded uppercase hover:text-white">Normal</button>
+
+                        {/* SELECTOR DE MODO */}
+                        <div className="flex flex-col gap-2">
+                            <div className="flex bg-black p-1 rounded-lg border border-white/10">
+                                <button
+                                    onClick={() => { setLoginMode('DIRECT'); }}
+                                    className={`px-3 py-1 text-[9px] font-black rounded uppercase transition-colors ${loginMode === 'DIRECT'
+                                            ? 'bg-[#00ff88] text-black'
+                                            : 'text-[#666] hover:text-white'
+                                        }`}
+                                >
+                                    Login Directo
+                                </button>
+                                <button
+                                    onClick={() => { setLoginMode('NORMAL'); setSelectedBookieUrl(''); }}
+                                    className={`px-3 py-1 text-[9px] font-black rounded uppercase transition-colors ${loginMode === 'NORMAL'
+                                            ? 'bg-white/10 text-white'
+                                            : 'text-[#666] hover:text-white'
+                                        }`}
+                                >
+                                    Normal
+                                </button>
+                            </div>
+
+                            {/* SELECTOR DE BOOKIE — solo visible en Login Directo */}
+                            {loginMode === 'DIRECT' && (
+                                <div className="flex flex-wrap gap-1.5 max-w-[360px] animate-in fade-in slide-in-from-top-1 duration-150">
+                                    {Object.entries(BOOKIE_URLS).map(([key, bookie]) => (
+                                        <button
+                                            key={key}
+                                            onClick={() => setSelectedBookieUrl(bookie.url)}
+                                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border transition-all ${selectedBookieUrl === bookie.url
+                                                    ? 'border-[#00ff88]/60 bg-[#00ff88]/10 text-[#00ff88]'
+                                                    : 'border-white/10 bg-white/5 text-[#888] hover:text-white hover:border-white/30'
+                                                }`}
+                                        >
+                                            {bookie.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            
                         </div>
+
+                        {/* BOTONES DERECHA */}
                         <div className="flex items-center gap-3">
-                            <button onClick={toggleAll} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded-lg border border-white/5">
+                            <button
+                                onClick={toggleAll}
+                                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-bold rounded-lg border border-white/5"
+                            >
                                 {selectedIds.length === filteredProfiles.length && filteredProfiles.length > 0 ? 'Nada' : 'Todos'}
                             </button>
                             <button
-                                onClick={() => onStart(selectedIds)}
-                                disabled={selectedIds.length === 0}
+                                onClick={() => onStart(selectedIds, getFinalUrl())}
+                                disabled={
+                                    selectedIds.length === 0 ||
+                                    (loginMode === 'DIRECT' && !selectedBookieUrl)
+                                }
                                 className="px-6 py-2 bg-[#00ff88] text-black font-black uppercase rounded-lg text-xs hover:bg-[#00cc6a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
                                 <Play size={14} /> Iniciar ({selectedIds.length})
@@ -1202,7 +1341,7 @@ export const CreateProfileModal = ({
         if (!form.country) return;
         setLoadingCities(true);
         setSoaxCities([]);
-        fetch(`/api/v1/proxies/soax/cities?country=${form.country.toLowerCase()}`)
+        fetch(`/api/v1/proxies/soax/cities?country=${form.country.toLowerCase()}&conn_type=mobile`)
             .then(r => r.json())
             .then(d => setSoaxCities(d.cities ?? []))
             .catch(() => { })
@@ -1741,22 +1880,15 @@ export const JobQueueModal = ({ isOpen, onClose, queue = 0, running = 0, failed 
                 </div>
                 <div className="bg-[#0a0a0a] border border-white/5 rounded-xl p-4 mb-6 h-40 overflow-y-auto custom-scrollbar space-y-2">
                     <p className="text-[10px] font-bold text-[#444] uppercase mb-2">Próximas Tareas</p>
-                    {pendingProfiles.length > 0 ? pendingProfiles.map((p: any) => (
+                    {pendingProfiles.map((p: any) => (
                         <div key={p.id} className="flex justify-between items-center text-xs text-[#ccc] p-2 bg-white/5 rounded">
                             <span>{p.name}</span>
-                            <span className="text-[10px] text-amber-500">⏳ En cola</span>
+                            <span className={`text-[10px] font-bold ${p.status?.includes('Rotando') ? 'text-blue-400 animate-pulse' : 'text-red-400'
+                                }`}>
+                                {p.status}
+                            </span>
                         </div>
-                    )) : (
-                        <div className="p-4 text-center text-[#444] text-xs">Sin tareas pendientes</div>
-                    )}
-                </div>
-                <div className="flex gap-3">
-                    <button className="flex-1 py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 font-bold rounded-xl border border-amber-500/20 text-xs uppercase transition-colors">
-                        Pausar Cola
-                    </button>
-                    <button className="flex-1 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold rounded-xl border border-red-500/20 text-xs uppercase transition-colors">
-                        Limpiar Fallidos
-                    </button>
+                    ))}
                 </div>
             </div>
         </div>

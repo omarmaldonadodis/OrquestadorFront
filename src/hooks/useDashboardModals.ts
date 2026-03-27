@@ -1,6 +1,6 @@
 // src/hooks/useDashboardModals.ts
 import { useState } from 'react';
-import { ServiceStatus, SystemEvent, ProfileItem, ConnectionItem } from '@/types/orchestratorTypes';
+import { ServiceStatus, SystemEvent, ProfileItem, ConnectionItem, Alert } from '@/types/orchestratorTypes';
 
 export function useDashboardModals() {
     const [dashModal, setDashModal]               = useState<{ type: string | null; data: any }>({ type: null, data: null });
@@ -15,6 +15,8 @@ export function useDashboardModals() {
     const [selectedConn, setSelectedConn]         = useState<ConnectionItem | null>(null);
     const [showSessionModal, setShowSessionModal] = useState(false);
     const [showCreateProfile, setShowCreateProfile] = useState(false);
+    const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+
 
     const [selectedProfileHistoryId, setSelectedProfileHistoryId] = useState<string | null>(null);
     const [profileHistoryData, setProfileHistoryData]             = useState<SystemEvent[]>([]);
@@ -32,6 +34,7 @@ export function useDashboardModals() {
         selectedConn, setSelectedConn,
         showSessionModal, setShowSessionModal,
         showCreateProfile, setShowCreateProfile,
+        selectedAlert, setSelectedAlert,
         selectedProfileHistoryId, setSelectedProfileHistoryId,
         profileHistoryData, setProfileHistoryData,
     };

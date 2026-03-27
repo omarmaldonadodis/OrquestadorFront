@@ -47,6 +47,37 @@ export interface ProfileItem {
     fingerprintScore?: number; // 0-100
     cookieStatus?: 'OK' | 'EXPIRED' | 'MISSING';
     proxyId?: number;
+    verifyResult?: VerifyResult;
+}
+
+export interface VerifyResult {
+    browser_score:     number;
+    fingerprint_score: number;
+    cookie_status:     string;
+    has_cookies:       boolean;
+    cookie_count:      number;
+    grade:             string;
+    issues:            string[];
+    warnings:          string[];
+    error?:            string;
+    breakdown?: {
+        automation_clean: boolean | null;
+        webrtc_clean:     boolean | null;
+        webgl_real:       boolean | null;
+        has_plugins:      boolean | null;
+        has_cookies:      boolean | null;
+        timezone_match:   boolean | null;
+    };
+    raw_fingerprint?: {
+        userAgent:           string | null;
+        platform:            string | null;
+        timezone:            string | null;
+        hardwareConcurrency: number | null;
+        deviceMemory:        number | null;
+        webdriver:           boolean | null;
+        webrtcLeak:          boolean | null;
+        automationProps:     string[];
+    };
 }
 
 export interface Alert {

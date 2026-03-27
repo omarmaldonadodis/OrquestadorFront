@@ -16,6 +16,16 @@ function formatUptime(ms: number): string {
     return `${mins}m`;
 }
 
+// IDs de eventos REST que ya existen en el feed de WS para evitar duplicados.
+// Si un evento WS con source "admin-panel"/"agent"/"proxy_rotation" ya cubre
+// el mismo hecho, se filtra el evento REST equivalente.
+const WS_OVERRIDES_REST_SOURCES = new Set([
+    'admin-panel',
+    'proxy_rotation',
+    'verify_profiles',
+    'auto_rotation',
+]);
+
 export function useOrchestratorData() {
     const [stats, setStats]             = useState<KPIStats | null>(null);
     const [nodes, setNodes]             = useState<ComputerNode[]>([]);
@@ -50,7 +60,48 @@ export function useOrchestratorData() {
             setStats(s);
             setProfiles(p);
             setAlerts(a);
-            setEvents(e);
+
+            // ── Merge inteligente: WS + REST ─────────────────────────
+            // Los eventos WS tienen id que empieza en "ws-".
+            // Los eventos REST tienen id numérico (sess-N, alert-N).
+            // Regla: si ya hay un evento WS reciente (< 10s) de la misma
+            // fuente cubierta por WS_OVERRIDES_REST_SOURCES, el evento
+            // REST queda descartado para evitar duplicados visibles.
+            setEvents(prev => {
+                const wsEvents = prev.filter(ev => String(ev.id).startsWith('ws-'));
+                const wsSourcesPresent = new Set(wsEvents.map(ev => ev.source));
+
+                // Filtrar eventos REST que ya están representados por WS
+                const restEventsFiltered = (e as SystemEvent[]).filter(restEv => {
+                    const src = restEv.source ?? '';
+                    // Si la fuente está en el override set Y hay eventos WS
+                    // de esa misma fuente → descartar el REST
+                    if (WS_OVERRIDES_REST_SOURCES.has(src) && wsSourcesPresent.has(src)) {
+                        return false;
+                    }
+                    return true;
+                });
+
+                const merged = [...wsEvents, ...restEventsFiltered];
+                const seen   = new Set<string>();
+                return merged
+                    .filter(ev => {
+                        const k = String(ev.id);
+                        if (seen.has(k)) return false;
+                        seen.add(k);
+                        return true;
+                    })
+                    .sort((a, b) => {
+                        // Mantener WS events al inicio (más recientes)
+                        const aIsWS = String(a.id).startsWith('ws-');
+                        const bIsWS = String(b.id).startsWith('ws-');
+                        if (aIsWS && !bIsWS) return -1;
+                        if (!aIsWS && bIsWS) return  1;
+                        return 0;
+                    })
+                    .slice(0, 30);
+            });
+
             setServices(svc);
             setConnections(c);
             setBackupStatus(b);
@@ -131,16 +182,12 @@ export function useOrchestratorData() {
     }, []);
 
     useEffect(() => {
-        // carga inmediata al montar
         refreshServices();
-
         const interval = setInterval(() => {
             if (!document.hidden) refreshServices();
-        }, 20_000); // cada 20 segundos
-
+        }, 20_000);
         return () => clearInterval(interval);
     }, [refreshServices]);
-    // ─────────────────────────────────────────────────────────────────
 
     return {
         // Estado
@@ -148,7 +195,7 @@ export function useOrchestratorData() {
         loading, refreshing,
         // Acciones
         fetchData, debouncedFetch,
-        setStats, 
+        setStats,
         setAlerts, setEvents, setProfiles,
         // Actualizaciones en tiempo real
         updateNodeLive, markNodeOnline, markNodeOffline,
