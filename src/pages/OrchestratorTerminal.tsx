@@ -191,7 +191,7 @@ const OrchestratorTerminal: React.FC = () => {
     const [adspowerStatus, setAdspowerStatus] = useState<'online' | 'offline' | 'error' | null>(null);
     // Auto-detectar computer propio por IP
     useEffect(() => {
-        orchestratorService.getMyComputer()
+        orchestratorService.getLocalAgent()
             .then(data => {
                 if (data.computer_id) {
                     setSelectedComputerId(data.computer_id.toString());

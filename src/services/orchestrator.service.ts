@@ -13,6 +13,7 @@ import {
 import { timeAgo } from '../utils/time';
 
 
+
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 const API = '/api/v1';
@@ -26,6 +27,36 @@ const fetchJSON = async (url: string, options?: RequestInit) => {
     return null;
   return res.json();
 };
+
+function getLocalIP(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]  // ← STUN público
+    });
+    pc.createDataChannel('');
+    pc.createOffer().then(o => pc.setLocalDescription(o));
+    pc.onicecandidate = (e) => {
+      if (!e.candidate) return;
+      const match = e.candidate.candidate.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
+      if (match && !match[1].startsWith('0.')) {
+        resolve(match[1]);
+        pc.close();
+      }
+    };
+    setTimeout(() => resolve(null), 4000);
+  });
+}
+
+function getComputerId() {
+  let id = localStorage.getItem("computer_id");
+
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("computer_id", id);
+  }
+
+  return id;
+}
 
 class OrchestratorService {
   async getDashboardStats() {
@@ -299,8 +330,26 @@ class OrchestratorService {
     });
   }
 
+  async getLocalAgent() {
+    try {
+      const res = await fetch("http://localhost:50320/whoami");
+      console.log("Local agent response:", res.status, res.statusText);
+      if (!res.ok) throw new Error();
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+
   async getMyComputer() {
-    return fetchJSON(`${API}/admin/my-computer`);
+    const agent = await this.getLocalAgent();
+
+    return fetchJSON(`${API}/admin/my-computer`, {
+      headers: agent
+        ? { "X-Computer-ID": agent.computer_id }
+        : {},
+    });
   }
 
   async cleanupStaleSessions(computerId?: string) {
