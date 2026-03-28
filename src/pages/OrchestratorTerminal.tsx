@@ -190,18 +190,19 @@ const OrchestratorTerminal: React.FC = () => {
     }[]>([]);
     const [adspowerStatus, setAdspowerStatus] = useState<'online' | 'offline' | 'error' | null>(null);
     // Auto-detectar computer propio por IP
+    // DESPUÉS — sin fallback a otro nodo, selectedComputerId queda null si el agente local está offline
     useEffect(() => {
         orchestratorService.getLocalAgent()
             .then(data => {
-                if (data.computer_id) {
+                if (data?.computer_id) {
                     setSelectedComputerId(data.computer_id.toString());
                 }
+                // Si data es null (agente offline), selectedComputerId queda null — correcto
             })
             .catch(() => {
-                const first = nodes.find(n => n.status === 'ONLINE');
-                if (first) setSelectedComputerId(first.id);
+                // No hacer fallback a otro nodo — dejar null
             });
-    }, [nodes]); // ← re-detectar cuando cambian los nodos
+    }, []); // Sin dependencia en [nodes] — solo detectar al montar // ← re-detectar cuando cambian los nodos
 
     const [verifyInProgress, setVerifyInProgress] = useState(false);
     const [activeAction, setActiveAction] = useState<string | null>(null);
@@ -424,6 +425,19 @@ const OrchestratorTerminal: React.FC = () => {
             const name = event.name ?? `Computer #${cid}`;
             if (cid) {
                 markNodeOnline(cid, event.connected_since);
+
+                // Si aún no hemos identificado la computadora local,
+                // aprovechar este evento para re-intentar la detección.
+                // Solo llama a localhost:50320 — no genera carga en el backend.
+                if (!selectedComputerId) {
+                    orchestratorService.getLocalAgent()
+                        .then(data => {
+                            if (data?.computer_id) {
+                                setSelectedComputerId(data.computer_id.toString());
+                            }
+                        })
+                        .catch(() => {});
+                }
 
                 setEvents(prev => [{
                     id: `ws-online-${Date.now()}`,
@@ -832,10 +846,33 @@ const OrchestratorTerminal: React.FC = () => {
     }, [setSelectedConn]);
 
     const handleStartSessions = async (selectedIds: string[], targetUrl: string) => {
-        const computer = nodes.find(n => n.id === selectedComputerId && n.status === 'ONLINE')
-            ?? nodes.find(n => n.status === 'ONLINE');
-        if (!computer) { alert('No hay agentes online'); return; }
+        // Solo permitir iniciar sesión en la computadora local detectada.
+        // Si el agente local no está disponible, mostrar error — nunca redirigir a otro nodo.
+        const computer = selectedComputerId
+            ? nodes.find(n => n.id === selectedComputerId && n.status === 'ONLINE')
+            : null;
 
+        if (!computer) {
+            setShowSessionModal(false);
+            setEvents(prev => [{
+                id: `ws-no-agent-${Date.now()}`,
+                type: 'ERROR' as const,
+                message: '❌ Agente local no disponible — abre la app del agente en esta computadora para iniciar sesiones',
+                source: 'admin-panel',
+                timestamp: new Date().toLocaleTimeString(),
+                meta: {},
+            }, ...prev.slice(0, 29)]);
+            setAlerts(prev => [{
+                id: Date.now(),
+                type: 'ERROR' as const,
+                message: 'Agente no disponible en esta computadora. Abre la aplicación del agente para continuar.',
+                source: 'admin-panel',
+                severity: 'Warning' as const,
+                time: 'ahora',
+                read: false,
+            }, ...prev]);
+            return;
+        }
         const results = await Promise.allSettled(
             selectedIds.map(id => {
                 const p = profiles.find(prof => prof.id === id);
