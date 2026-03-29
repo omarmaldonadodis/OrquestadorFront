@@ -1386,18 +1386,7 @@ export const CreateProfileModal = ({
                                     <label className={labelCls}>Propietario *</label>
                                     <input className={fieldCls} placeholder="Nombre del dueño" value={form.owner} onChange={e => set('owner', e.target.value)} />
                                 </div>
-                                <div className="space-y-2">
-                                    <label className={labelCls}>Casa de Apuestas</label>
-                                    <select className={fieldCls} value={form.bookie} onChange={e => set('bookie', e.target.value)}>
-                                        {BOOKIES.map(b => <option key={b}>{b}</option>)}
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className={labelCls}>Deporte</label>
-                                    <select className={fieldCls} value={form.sport} onChange={e => set('sport', e.target.value)}>
-                                        {SPORTS.map(s => <option key={s}>{s}</option>)}
-                                    </select>
-                                </div>
+
                             </div>
                         </div>
                     )}
@@ -1445,33 +1434,7 @@ export const CreateProfileModal = ({
                                     </select>
                                 </div>
                             </div>
-                            <div className="space-y-2">
-                                <label className={labelCls}>Rotación automática de IP</label>
-                                <div className="flex gap-2 flex-wrap">
-                                    {[{ val: 0, label: 'Manual' }, { val: 10, label: '10 min' }, { val: 30, label: '30 min' }, { val: 60, label: '1 hora' }, { val: 120, label: '2 horas' }].map(r => (
-                                        <button
-                                            key={r.val}
-                                            onClick={() => set('rotationMinutes', r.val)}
-                                            className={`px-4 py-2 rounded-lg border text-xs font-black uppercase transition-all ${form.rotationMinutes === r.val
-                                                    ? 'border-[#00ff88]/50 bg-[#00ff88]/10 text-[#00ff88]'
-                                                    : 'border-white/10 bg-white/[0.02] text-[#666] hover:text-white hover:bg-white/5'
-                                                }`}
-                                        >
-                                            {r.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <label className={labelCls}>URLs de Warm-up (una por línea)</label>
-                                <p className="text-[10px] text-[#444]">El navegador visitará estas URLs al crearse para generar historial natural.</p>
-                                <textarea
-                                    className={`${fieldCls} resize-none font-mono text-xs`}
-                                    rows={4}
-                                    value={form.warmupUrls}
-                                    onChange={e => set('warmupUrls', e.target.value)}
-                                />
-                            </div>
+                           
                         </div>
                     )}
 
@@ -1518,40 +1481,9 @@ export const CreateProfileModal = ({
                                         {(SCREENS_BY_DEVICE[form.deviceType] || []).map(r => <option key={r}>{r}</option>)}
                                     </select>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className={labelCls}>Idioma del Navegador</label>
-                                    <select className={fieldCls} value={form.language} onChange={e => set('language', e.target.value)}>
-                                        {['es-ES', 'es-MX', 'en-US', 'en-GB', 'it-IT', 'de-DE', 'fr-FR', 'pt-BR'].map(l => <option key={l}>{l}</option>)}
-                                    </select>
-                                </div>
+                               
                             </div>
-                            <div className="space-y-3">
-                                <label className={labelCls}>Opciones</label>
-                                {[
-                                    { key: 'autoFingerprint', label: 'Huella digital automática', desc: 'Canvas, WebGL y AudioContext generados basados en la IP asignada' },
-                                    { key: 'openOnCreate', label: 'Abrir navegador al crear', desc: 'Lanza el navegador en la primera computadora disponible' },
-                                ].map(opt => (
-                                    <label key={opt.key} className="flex items-start gap-3 cursor-pointer group">
-                                        <div
-                                            className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border flex-shrink-0 transition-all ${(form as any)[opt.key]
-                                                    ? 'bg-[#00ff88] border-[#00ff88]'
-                                                    : 'border-white/20 bg-white/5 group-hover:border-white/40'
-                                                }`}
-                                            onClick={() => set(opt.key, !(form as any)[opt.key])}
-                                        >
-                                            {(form as any)[opt.key] && (
-                                                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                                                    <path d="M1 4L3.5 6.5L9 1" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                                </svg>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-white">{opt.label}</p>
-                                            <p className="text-[10px] text-[#555]">{opt.desc}</p>
-                                        </div>
-                                    </label>
-                                ))}
-                            </div>
+                           
                         </div>
                     )}
 
@@ -1567,11 +1499,8 @@ export const CreateProfileModal = ({
                                         ['Deporte', form.sport],
                                         ['Proxy', form.proxyType.replace('_', ' ')],
                                         ['País / Ciudad', `${form.country}${form.city ? ' / ' + form.city : ''}`],
-                                        ['Rotación IP', form.rotationMinutes === 0 ? 'Manual' : `${form.rotationMinutes} min`],
                                         ['Dispositivo', `${form.deviceType} · ${form.os}`],
                                         ['Resolución', form.screenRes],
-                                        ['Idioma', form.language],
-                                        ['URLs warm-up', `${form.warmupUrls.split('\n').filter(Boolean).length} URL(s)`],
                                     ].map(([k, v]) => (
                                         <div key={k} className="flex justify-between border-b border-white/5 py-1">
                                             <span className="text-[#555] font-bold">{k}</span>
